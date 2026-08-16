@@ -14,7 +14,7 @@ data/processed/
 *.tar
 *.gz
 
-*.pkl
+
 *.joblib
 
 .vscode/
