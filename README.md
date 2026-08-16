@@ -1,101 +1,149 @@
 # CSNet-IDA
 
-## Intrusion Detection System Using a Two-Stage Random Forest Architecture
+## Two-Stage Machine Learning Intrusion Detection System
 
-CSNet-IDA is a machine-learning-based Intrusion Detection System (IDS) designed to identify malicious network traffic and classify detected attacks into their corresponding attack families.
+CSNet-IDA is a machine-learning-based Intrusion Detection System (IDS) designed to detect malicious network traffic and classify detected attacks into their respective attack families.
 
-The system uses a two-stage classification architecture:
+The system uses a **two-stage Random Forest architecture**:
 
-1. **Stage 1 — Binary Detection**
+* **Stage 1:** Binary classification — Normal vs Attack
+* **Stage 2:** Attack-family classification — DoS, Probe, R2L, and U2R
 
-   * Classifies network traffic as `Normal` or `Attack`.
-   * Uses a Random Forest classifier.
-   * Uses a configurable probability threshold for attack detection.
+The project is developed using the NSL-KDD dataset and implemented in Python using Scikit-learn.
 
-2. **Stage 2 — Attack Family Classification**
+---
 
-   * Applied to traffic identified as an attack.
-   * Classifies attacks into:
+## System Architecture
 
-     * DoS
-     * Probe
-     * R2L
-     * U2R
+```text
+                    NETWORK CONNECTION
+                            |
+                            v
+                  FEATURE PREPROCESSING
+                            |
+                            v
+                +-----------------------+
+                |       STAGE 1         |
+                |   Binary Classifier   |
+                |    Random Forest      |
+                +-----------------------+
+                     /             \
+                    /               \
+                   v                 v
+              NORMAL              ATTACK
+                                    |
+                                    v
+                          +-------------------+
+                          |      STAGE 2      |
+                          | Attack Classifier |
+                          |   Random Forest   |
+                          +-------------------+
+                            /    |    |    \
+                           /     |    |     \
+                          v      v    v      v
+                         DoS   Probe  R2L    U2R
+```
+
+---
 
 ## Dataset
 
-The project uses the NSL-KDD dataset.
+CSNet-IDA uses the **NSL-KDD** benchmark dataset for network intrusion detection.
 
-The dataset contains network connection records represented by 41 attributes, including:
+The dataset contains network connection records represented using 41 attributes, including:
 
 * Duration
 * Protocol type
 * Service
-* Flag
+* Connection flag
 * Source and destination bytes
+* Login and privilege-related features
 * Connection statistics
 * Host-based traffic statistics
 
-The raw dataset files are intentionally excluded from this repository.
+The raw dataset is **not included in this repository**.
 
-## Architecture
+---
 
-```text
-Network Traffic
-       |
-       v
-Data Preprocessing
-       |
-       v
-Stage 1: Random Forest
-       |
-       +------------------+
-       |                  |
-     Normal              Attack
-       |                  |
-       v                  v
-    NORMAL        Stage 2: Random Forest
-                         |
-             +-----------+-----------+-----------+
-             |           |           |           |
-            DoS        Probe        R2L         U2R
-```
+## Attack Families
+
+The attack labels are grouped into four major attack families:
+
+| Family | Example Attacks                                                                             |
+| ------ | ------------------------------------------------------------------------------------------- |
+| DoS    | `back`, `land`, `neptune`, `pod`, `smurf`, `teardrop`                                       |
+| Probe  | `ipsweep`, `nmap`, `portsweep`, `satan`                                                     |
+| R2L    | `ftp_write`, `guess_passwd`, `imap`, `multihop`, `phf`, `spy`, `warezclient`, `warezmaster` |
+| U2R    | `buffer_overflow`, `loadmodule`, `perl`, `rootkit`                                          |
+
+Normal traffic is handled separately by Stage 1.
+
+---
 
 ## Preprocessing
 
-Categorical network features are transformed using a fitted `ColumnTransformer` with one-hot encoding.
+The input data contains both numerical and categorical features.
 
-The preprocessing pipeline converts the original 40 input features into 120 processed features for the Random Forest models.
+Categorical features such as:
 
-The same fitted preprocessing pipeline is reused during inference.
+* `protocol_type`
+* `service`
+* `flag`
 
-## Stage 1 — Binary Classification
+are encoded using a fitted Scikit-learn preprocessing pipeline.
 
-The Stage 1 Random Forest classifier was evaluated on the held-out internal test set.
+The original **40 input features** are transformed into **120 processed features**.
 
-### Results
+The same fitted preprocessing pipeline is reused during inference to maintain consistency between training and prediction.
 
-| Metric    |  Score |
-| --------- | -----: |
-| Accuracy  | 99.93% |
-| Precision | 99.90% |
-| Recall    | 99.92% |
-| F1 Score  | 99.91% |
+---
+
+# Stage 1 — Binary Attack Detection
+
+Stage 1 determines whether a network connection is:
+
+```text
+Normal
+   or
+Attack
+```
+
+A Random Forest classifier is used for the binary detection task.
+
+### Internal Test Results
+
+| Metric        |     Result |
+| ------------- | ---------: |
+| Accuracy      | **99.93%** |
+| Normal Recall | **99.94%** |
+| Attack Recall | **99.91%** |
 
 Confusion Matrix:
 
 ```text
-[[13457    12]
- [    9 11717]]
+                 Predicted
+               Normal  Attack
+
+Actual Normal    13461      8
+Actual Attack       10  11716
 ```
 
-The final saved model uses an attack probability threshold of approximately `0.40`.
+The final model uses a configurable attack probability threshold.
 
-## Stage 2 — Attack Family Classification
+---
 
-Stage 2 was trained using attack samples and classifies them into four attack families.
+# Stage 2 — Attack Family Classification
 
-### Internal Evaluation
+Traffic classified as an attack by Stage 1 is passed to Stage 2.
+
+Stage 2 classifies the attack into:
+
+* DoS
+* Probe
+* R2L
+* U2R
+
+### Internal Test Results
 
 | Attack Family | Precision | Recall |   F1 |
 | ------------- | --------: | -----: | ---: |
@@ -104,83 +152,123 @@ Stage 2 was trained using attack samples and classifies them into four attack fa
 | R2L           |      1.00 |   0.99 | 1.00 |
 | U2R           |      0.75 |   1.00 | 0.86 |
 
-Overall internal accuracy:
+Overall Stage 2 accuracy:
 
 **99.98%**
 
-The relatively small number of U2R samples should be considered when interpreting its metrics.
+The U2R class contains very few samples, so its metrics should be interpreted with caution.
 
-## End-to-End Classification
+---
 
-The complete system operates as follows:
+# End-to-End IDS
+
+The complete inference pipeline is:
 
 ```text
-Input Network Connection
-          |
-          v
-     Preprocessing
-          |
-          v
-   Stage 1 Classifier
-          |
-     +----+----+
-     |         |
-  Normal     Attack
-     |         |
-     v         v
-  NORMAL   Stage 2 Classifier
-                |
-        +-------+-------+-------+
-        |       |       |       |
-       DoS    Probe    R2L     U2R
+Raw Network Features
+        |
+        v
+Preprocessing
+        |
+        v
+Stage 1 Random Forest
+        |
+        +------------------+
+        |                  |
+        v                  v
+     Normal              Attack
+        |                  |
+        v                  v
+     NORMAL        Stage 2 Random Forest
+                          |
+              +-----------+-----------+
+              |           |           |
+             DoS        Probe        R2L
+                                      |
+                                      U2R
 ```
 
-This design separates the initial detection problem from the more specific attack-family classification problem.
+This hierarchical architecture separates **attack detection** from **attack-family identification**.
+
+---
+
+## Model Files
+
+The trained models are stored in the `models/` directory.
+
+| File                                      | Purpose                        |
+| ----------------------------------------- | ------------------------------ |
+| `random_forest_final.pkl`                 | Stage 1 binary classifier      |
+| `preprocessor_final.pkl`                  | Feature preprocessing pipeline |
+| `threshold_final.pkl`                     | Stage 1 decision threshold     |
+| `attack_family_random_forest_final.pkl`   | Stage 2 classifier             |
+| `attack_family_labels_final.pkl`          | Stage 2 label mapping          |
+| `intrusion_detection_two_stage_final.pkl` | Combined IDS artifact          |
+
+---
 
 ## Project Structure
 
 ```text
 CSNet-IDA/
 │
+├── app/
+│
 ├── data/
-│   └── raw/                  # Dataset files (excluded from Git)
+│   └── raw/
+│       └── Dataset files are excluded from Git
+│
+├── models/
+│   ├── attack_family_labels_final.pkl
+│   ├── attack_family_random_forest_final.pkl
+│   ├── intrusion_detection_two_stage_final.pkl
+│   ├── preprocessor_final.pkl
+│   ├── random_forest_final.pkl
+│   └── threshold_final.pkl
 │
 ├── notebooks/
 │   └── 01_data_exploration.ipynb
-│
-├── models/                   # Model artifacts
 │
 ├── results/
 │   ├── figures/
 │   └── reports/
 │
-├── src/                      # Source code
-│
-├── app/                      # Application layer
+├── src/
 │
 ├── .gitignore
-├── requirements.txt
-└── README.md
+├── README.md
+└── requirements.txt
 ```
+
+---
 
 ## Installation
 
-Create and activate the Conda environment:
+Clone the repository:
+
+```bash
+git clone https://github.com/sumaiya-ds/CSNet-IDA.git
+cd CSNet-IDA
+```
+
+Create the Conda environment:
 
 ```bash
 conda create -n data-science python=3.11
 conda activate data-science
 ```
 
-Install the required packages:
+Install dependencies:
 
 ```bash
 pip install -r requirements.txt
 ```
 
-## Running the Notebook
+---
 
-Start Jupyter:
+## Running the Project
+
+Start Jupyter Notebook:
 
 ```bash
 jupyter notebook
@@ -194,36 +282,63 @@ notebooks/01_data_exploration.ipynb
 
 Run the notebook cells sequentially.
 
-## Saved Model Components
+The notebook contains the data exploration, preprocessing, model development, evaluation, and IDS experimentation workflow.
 
-The trained system consists of:
+---
 
-* Random Forest binary classifier
-* Feature preprocessing pipeline
-* Detection threshold
-* Attack-family Random Forest classifier
-* Attack-family label mapping
+## Evaluation Strategy
 
-Large serialized model files are excluded from GitHub using `.gitignore`.
+The project separates:
+
+### Training
+
+Model training is performed using the training portion of the NSL-KDD data.
+
+### Internal Evaluation
+
+A held-out test split is used during development to evaluate the trained models.
+
+### External Validation
+
+The KDDTest+ dataset was also evaluated separately to investigate generalization to an external test distribution.
+
+The external evaluation produced substantially lower performance, particularly for the rare R2L and U2R attack families.
+
+This behavior highlights the difference between strong performance on an internal held-out distribution and generalization to a separate benchmark distribution.
+
+The external evaluation is therefore treated as a **generalization experiment rather than the primary headline result**.
+
+---
 
 ## Limitations
 
-The internal evaluation results are based on the held-out evaluation split used during model development.
+Several limitations remain:
 
-Performance on an external NSL-KDD test distribution can differ substantially because of distribution shift and differences between the training and external test distributions.
+* Strong class imbalance exists among attack families.
+* R2L and U2R contain relatively few training examples.
+* Performance can change significantly under distribution shift.
+* The current system operates on pre-extracted network connection features rather than directly capturing live packets.
+* The current implementation does not yet provide a complete real-time monitoring interface.
 
-Therefore, the reported internal metrics should not be interpreted as universal real-world IDS performance.
+---
 
-## Future Improvements
+## Future Work
 
-* Improve generalization to unseen network traffic.
-* Address class imbalance in rare attack families such as R2L and U2R.
-* Evaluate additional machine-learning algorithms.
-* Investigate feature selection and dimensionality reduction.
-* Add real-time network packet ingestion.
-* Develop a web-based monitoring dashboard.
-* Add alert generation and attack logging.
-* Perform cross-dataset validation.
+Potential improvements include:
+
+* Real-time packet capture and inference
+* Improved handling of rare attack classes
+* Cost-sensitive learning
+* Class-weighted and ensemble approaches
+* Feature selection
+* Hyperparameter optimization
+* Cross-dataset evaluation
+* Explainable AI for intrusion predictions
+* Real-time alert generation
+* Web-based IDS monitoring dashboard
+* Attack logging and visualization
+
+---
 
 ## Technologies
 
@@ -232,7 +347,15 @@ Therefore, the reported internal metrics should not be interpreted as universal 
 * NumPy
 * Scikit-learn
 * Random Forest
-* Jupyter Notebook
 * Joblib
+* Jupyter Notebook
 * Matplotlib
 * Seaborn
+
+---
+
+## Project Status
+
+**Completed prototype / research implementation**
+
+The current implementation demonstrates a two-stage machine-learning IDS pipeline with trained models, preprocessing artifacts, evaluation workflow, and external validation experiments.
