@@ -2179,5 +2179,200 @@ body.soc-theme {
 .fill-medium { background-color: #eab308; }
 .fill-normal { background-color: #22c55e; }
 
+/* Topbar Persistent System Status Ribbon */
+.topbar-status-bar {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin-left: 1.25rem;
+    flex-wrap: wrap;
+}
+
+.status-chip {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.68rem;
+    font-weight: 600;
+    padding: 0.2rem 0.55rem;
+    border-radius: 4px;
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    color: var(--text-muted);
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    letter-spacing: 0.02em;
+}
+
+.status-chip.chip-online {
+    color: #22c55e;
+    border-color: rgba(34, 197, 94, 0.25);
+    background: rgba(34, 197, 94, 0.08);
+}
+
+.status-chip.chip-online .chip-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background-color: #22c55e;
+    box-shadow: 0 0 8px #22c55e;
+}
+
+.status-chip.chip-thresh {
+    color: #f59e0b;
+    border-color: rgba(245, 158, 11, 0.25);
+    background: rgba(245, 158, 11, 0.08);
+}
+
+/* Investigation Workflow Breadcrumb Ribbon */
+.inv-workflow-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0.65rem 1.25rem;
+    background: rgba(15, 23, 42, 0.85);
+    border-bottom: 1px solid var(--border-color);
+    overflow-x: auto;
+    gap: 0.4rem;
+}
+
+.inv-step-crumb {
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+    padding: 0.25rem 0.55rem;
+    border-radius: 4px;
+    font-size: 0.68rem;
+    font-weight: 700;
+    font-family: 'JetBrains Mono', monospace;
+    color: var(--text-muted);
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    white-space: nowrap;
+}
+
+.inv-step-crumb.active {
+    color: var(--c-accent);
+    border-color: rgba(0, 240, 255, 0.3);
+    background: rgba(0, 240, 255, 0.08);
+}
+
+.inv-step-crumb .crumb-num {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    background: rgba(0, 240, 255, 0.2);
+    font-size: 0.6rem;
+    color: #ffffff;
+}
+
+.inv-crumb-arrow {
+    color: var(--text-dim);
+    font-size: 0.65rem;
+}
+
+/* Traffic Meta Grid */
+.inv-traffic-meta-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 0.5rem;
+    padding: 0.65rem 0.85rem;
+    background: var(--bg-card-inner);
+    border-radius: 6px;
+    border: 1px solid var(--border-color);
+    font-size: 0.78rem;
+}
+
+.meta-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.meta-key {
+    color: var(--text-dim);
+    font-size: 0.7rem;
+    font-weight: 600;
+}
+
+.meta-val {
+    color: var(--text-bright);
+}
+
+/* Explainability Distinction Banner */
+.explainability-distinction-banner {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0.85rem;
+    padding: 0.75rem 1rem;
+    background: rgba(15, 23, 42, 0.7);
+    border: 1px solid rgba(59, 130, 246, 0.25);
+    border-radius: 6px;
+}
+
+.dist-col strong {
+    display: block;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.72rem;
+    color: var(--c-accent);
+    margin-bottom: 0.2rem;
+}
+
+.dist-col p {
+    font-size: 0.73rem;
+    color: var(--text-muted);
+    line-height: 1.35;
+    margin: 0;
+}
+
+/* Lifecycle Flow Tracker */
+.lifecycle-flow-tracker {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.5rem 0.85rem;
+    background: var(--bg-card-inner);
+    border-radius: 6px;
+    border: 1px solid var(--border-color);
+    overflow-x: auto;
+}
+
+.life-step {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.7rem;
+    font-weight: 700;
+    padding: 0.2rem 0.6rem;
+    border-radius: 4px;
+    color: var(--text-dim);
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid transparent;
+}
+
+.life-step.current {
+    color: #ffffff;
+    background: rgba(59, 130, 246, 0.2);
+    border-color: #3b82f6;
+    box-shadow: 0 0 10px rgba(59, 130, 246, 0.3);
+}
+
+.life-arrow {
+    color: var(--text-dim);
+    font-size: 0.7rem;
+}
+
+/* Clickable Distribution Meters */
+.metric-row-clickable {
+    cursor: pointer;
+    transition: background 0.15s ease;
+    padding: 0.25rem 0.4rem;
+    border-radius: 4px;
+}
+
+.metric-row-clickable:hover {
+    background: rgba(255, 255, 255, 0.05);
+}
+
 
 

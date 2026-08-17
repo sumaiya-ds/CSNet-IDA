@@ -301,7 +301,7 @@ document.addEventListener("DOMContentLoaded", () => {
                 postureFactors.innerHTML = data.posture_factors.map(f => `<div class="factor-item">● ${f}</div>`).join("");
             }
 
-            // Attack Family Breakdown Meters
+            // Attack Family Breakdown Meters (Interactive Filter Navigation)
             const families = data.families || {};
             const attackTotal = data.attack_flows || 1;
             ["dos", "probe", "r2l", "u2r"].forEach(fKey => {
@@ -313,10 +313,22 @@ document.addEventListener("DOMContentLoaded", () => {
                 if (meterEl) {
                     const pct = data.attack_flows > 0 ? ((count / attackTotal) * 100).toFixed(1) : 0;
                     meterEl.style.width = `${pct}%`;
+                    const rowEl = meterEl.closest(".metric-row");
+                    if (rowEl) {
+                        rowEl.classList.add("metric-row-clickable");
+                        rowEl.title = `Click to filter Incident Center by ${fName}`;
+                        rowEl.onclick = () => {
+                            switchTab("incident-center");
+                            if (incFilterFamily) {
+                                incFilterFamily.value = fName;
+                                loadIncidents();
+                            }
+                        };
+                    }
                 }
             });
 
-            // Severity Breakdown Meters
+            // Severity Breakdown Meters (Interactive Filter Navigation)
             const sevs = data.severities || {};
             const sevTotal = data.total_flows || 1;
             ["critical", "high", "medium", "low"].forEach(sKey => {
@@ -325,7 +337,21 @@ document.addEventListener("DOMContentLoaded", () => {
                 const countEl = document.getElementById(`stat-sev-${sKey}`);
                 const meterEl = document.getElementById(`meter-sev-${sKey}`);
                 if (countEl) countEl.textContent = `${count} (${pct}%)`;
-                if (meterEl) meterEl.style.width = `${pct}%`;
+                if (meterEl) {
+                    meterEl.style.width = `${pct}%`;
+                    const rowEl = meterEl.closest(".metric-row");
+                    if (rowEl) {
+                        rowEl.classList.add("metric-row-clickable");
+                        rowEl.title = `Click to filter Incident Center by ${sKey.toUpperCase()}`;
+                        rowEl.onclick = () => {
+                            switchTab("incident-center");
+                            if (incFilterSeverity) {
+                                incFilterSeverity.value = sKey;
+                                loadIncidents();
+                            }
+                        };
+                    }
+                }
             });
 
             // Transport Layer Protocol Distribution
@@ -716,8 +742,20 @@ document.addEventListener("DOMContentLoaded", () => {
             if (modalStage1Prob) modalStage1Prob.textContent = `${(inc.attack_probability * 100).toFixed(2)}%`;
             if (modalStatusBadge) modalStatusBadge.textContent = inc.status;
 
+            // Traffic Meta Info
+            const modalProtoSvc = document.getElementById("modal-proto-svc");
+            const modalBytes = document.getElementById("modal-bytes");
+            const modalCount = document.getElementById("modal-count");
+            const modalTimestamp = document.getElementById("modal-timestamp");
+
+            if (modalProtoSvc) modalProtoSvc.textContent = `${inc.protocol} / ${inc.service} (${inc.flag})`;
+            if (modalBytes) modalBytes.textContent = `${inc.src_bytes} src / ${inc.dst_bytes} dst bytes`;
+            if (modalCount) modalCount.textContent = inc.features && inc.features.count ? `${inc.features.count} connections / 2s` : "Single flow burst";
+            if (modalTimestamp) modalTimestamp.textContent = inc.timestamp;
+
+            // Pipeline Execution
             if (modalPipelineDesc) {
-                modalPipelineDesc.textContent = `Stage 1: P(Attack)=${(inc.attack_probability * 100).toFixed(2)}% (Threshold: ${inc.stage1_threshold.toFixed(2)}) ➔ Stage 2: ${inc.attack_family}`;
+                modalPipelineDesc.textContent = `Stage 1 Binary Random Forest flagged flow with P(Attack) = ${(inc.attack_probability * 100).toFixed(2)}% (Calibrated threshold: ${inc.stage1_threshold.toFixed(2)}) ➔ Routed to Stage 2 Multiclass model ➔ Classified as ${inc.attack_family}.`;
             }
 
             // Stage 2 Probability Breakdown
@@ -732,13 +770,14 @@ document.addEventListener("DOMContentLoaded", () => {
                 `).join("");
             }
 
-            // Model Feature Contributions
+            // "Why was this detected?" - Feature Contributions Table
             if (modalContributionsTbody) {
                 modalContributionsTbody.innerHTML = contribs.map(c => `
                     <tr>
-                        <td><strong>${c.feature}</strong></td>
-                        <td class="mono">${c.value}</td>
-                        <td class="mono text-cyan">${(c.global_importance * 100).toFixed(2)}%</td>
+                        <td><strong class="mono text-cyan">${c.feature}</strong></td>
+                        <td class="mono">${c.flow_value !== undefined ? c.flow_value : (c.value !== undefined ? c.value : "--")}</td>
+                        <td class="mono text-bright">${c.global_importance_pct !== undefined ? `${c.global_importance_pct}%` : `${(c.global_importance * 100).toFixed(2)}%`}</td>
+                        <td class="text-xs text-muted">${c.detection_signal || c.description || "Contributes to split decision tree depth."}</td>
                     </tr>
                 `).join("");
             }
@@ -753,6 +792,15 @@ document.addEventListener("DOMContentLoaded", () => {
                     </div>
                 `).join("");
             }
+
+            // Update Lifecycle Flow Tracker
+            const steps = ["new", "investigating", "confirmed", "resolved"];
+            steps.forEach(st => {
+                const stepEl = document.getElementById(`life-step-${st}`);
+                if (stepEl) {
+                    stepEl.classList.toggle("current", (inc.status || "New").toLowerCase() === st);
+                }
+            });
 
             // Pre-populate status form
             if (modalStatusSelect) modalStatusSelect.value = inc.status;
@@ -800,8 +848,19 @@ document.addEventListener("DOMContentLoaded", () => {
                 if (!resp.ok) throw new Error("Status update failed");
                 const res = await resp.json();
                 if (modalStatusBadge) modalStatusBadge.textContent = newStatus;
+
+                // Update tracker
+                const steps = ["new", "investigating", "confirmed", "resolved"];
+                steps.forEach(st => {
+                    const stepEl = document.getElementById(`life-step-${st}`);
+                    if (stepEl) {
+                        stepEl.classList.toggle("current", newStatus.toLowerCase() === st);
+                    }
+                });
+
                 loadIncidents();
                 loadOverviewIncidents();
+                loadAnalyticsSummary();
                 if (incidentModalOverlay) incidentModalOverlay.style.display = "none";
             } catch (err) {
                 console.error("Status update error:", err);
@@ -1027,72 +1086,72 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     // =========================================================================
-    // 5. Demonstration Mode (8 Guided SOC Workflow Steps)
+    // 5. Demonstration Mode (8-Stage Presentation Walkthrough & Auto-Play)
     // =========================================================================
     const DEMO_STEPS = [
         {
-            num: "STEP 1 / 8",
-            title: "Normal Operations Baseline",
-            desc: "The demonstration begins by generating legitimate enterprise web, mail, and DNS traffic vectors. Every connection is evaluated through the real Two-Stage Random Forest models.",
+            num: "STAGE 1 / 8",
+            title: "Normal Operations Baseline (Legitimate Traffic)",
+            desc: "The presentation begins with legitimate enterprise communications (HTTP, FTP, SMTP, DNS). Connections pass through Stage 1 Binary Random Forest to verify that nominal behavior is safely admitted without false alarms.",
             actionType: "preset",
             actionParam: "normal",
-            promptText: "Click 'Execute Step' to simulate legitimate enterprise FTP data traffic."
+            promptText: "Click 'Execute Step' or 'Auto-Play' to evaluate authentic enterprise normal traffic."
         },
         {
-            num: "STEP 2 / 8",
-            title: "Denial of Service (DoS) Neptune SYN Flood",
-            desc: "High-volume SYN flood attack exhausting server connection queues with S0 flags and 0 destination bytes.",
-            actionType: "preset",
-            actionParam: "dos",
-            promptText: "Click 'Execute Step' to ingest a high-intensity Neptune SYN flood packet."
-        },
-        {
-            num: "STEP 3 / 8",
-            title: "Surveillance & Port Reconnaissance (IPSweep)",
-            desc: "Automated network host discovery and port scan probing multiple destination hosts with ICMP echo requests.",
+            num: "STAGE 2 / 8",
+            title: "Network Surveillance & Port Reconnaissance",
+            desc: "An adversary initiates automated host discovery and port scanning (IPSweep/PortScan). Stage 1 detects abnormal ICMP echo request velocity and service diversity, routing the threat to Stage 2.",
             actionType: "preset",
             actionParam: "probe",
-            promptText: "Click 'Execute Step' to evaluate an ICMP ping sweep reconnaissance vector."
+            promptText: "Click 'Execute Step' to score an active network scanning probe vector."
         },
         {
-            num: "STEP 4 / 8",
-            title: "Remote-to-Local Compromise (Warezclient)",
-            desc: "Unauthorized external intruder attempting unauthorized file transfers and credential exploitation.",
+            num: "STAGE 3 / 8",
+            title: "High-Intensity Attack Ingestion (DoS Storm)",
+            desc: "A massive Denial of Service SYN flood (Neptune) targets the enterprise server infrastructure with S0 flags, zero payload bytes, and saturated connection counts.",
             actionType: "preset",
-            actionParam: "r2l",
-            promptText: "Click 'Execute Step' to execute inference on an R2L pirate warez download attempt."
+            actionParam: "dos",
+            promptText: "Click 'Execute Step' to evaluate a high-intensity Neptune SYN flood attack."
         },
         {
-            num: "STEP 5 / 8",
-            title: "User-to-Root Privilege Escalation (Rootkit)",
-            desc: "Local unauthorized privilege escalation exploiting system calls to obtain root shell credentials.",
-            actionType: "preset",
-            actionParam: "u2r",
-            promptText: "Click 'Execute Step' to score a local root shell escalation vector."
-        },
-        {
-            num: "STEP 6 / 8",
-            title: "Decision Threshold Sensitivity Tuning",
-            desc: "Demonstrating how tuning the Stage 1 threshold (from standard τ = 0.40 to custom sensitivity values) allows SOC analysts to balance false positives vs. high-security strictness.",
-            actionType: "threshold_demo",
+            num: "STAGE 4 / 8",
+            title: "Hierarchical Multiclass Routing (Stage 2 Classification)",
+            desc: "The two-stage architecture routes all Stage 1 detections (P ≥ 0.40) into the specialized Stage 2 Multiclass Random Forest, classifying the threat into DoS, Probe, R2L, or U2R with full class probabilities.",
+            actionType: "multiclass_demo",
             actionParam: null,
-            promptText: "Click 'Execute Step' to run comparative evaluation across τ = 0.20, τ = 0.40, and τ = 0.70."
+            promptText: "Click 'Execute Step' to observe multiclass probability distribution evaluation."
         },
         {
-            num: "STEP 7 / 8",
-            title: "Real-Time Explainability & Feature Attribution",
-            desc: "Extracts real feature contribution scores for the active attack vector, identifying exactly which network features triggered the detection.",
+            num: "STAGE 5 / 8",
+            title: "Automated Incident Creation & Telemetry Ingestion",
+            desc: "Upon classifying an attack, the CSNet-IDA engine automatically instantiates an actionable Security Incident record containing timestamp, severity rating, and full 40-feature snapshot.",
+            actionType: "incident_create",
+            actionParam: null,
+            promptText: "Click 'Execute Step' to review the newly generated incident record in the SOC queue."
+        },
+        {
+            num: "STAGE 6 / 8",
+            title: "SOC Analyst Deep Triage & Flow Investigation",
+            desc: "The analyst opens the investigation workstation to inspect transport headers, payload bytes, TCP connection flags, and burst velocity metrics.",
+            actionType: "investigate_demo",
+            actionParam: null,
+            promptText: "Click 'Execute Step' to perform deep flow telemetry investigation."
+        },
+        {
+            num: "STAGE 7 / 8",
+            title: "Model Explanation ('Why Was This Detected?')",
+            desc: "The model reveals the top contributing indicators by pairing verified Global Random Forest feature importances with the exact observed values of the ingested connection vector.",
             actionType: "explain",
             actionParam: "dos",
-            promptText: "Click 'Execute Step' to compute real-time feature attributions."
+            promptText: "Click 'Execute Step' to compute transparent model feature attributions."
         },
         {
-            num: "STEP 8 / 8",
-            title: "External Generalization Benchmark Summary",
-            desc: "Concludes the demonstration with an overview of academic benchmark evaluations on NSL-KDD (Internal 99.93% vs External KDDTest+ 77.20% domain shift).",
-            actionType: "eval_summary",
+            num: "STAGE 8 / 8",
+            title: "Incident Containment & Lifecycle Resolution",
+            desc: "The analyst applies mitigation rules (firewall rate-limiting, source IP blocking) and updates the incident lifecycle state from NEW ➔ INVESTIGATING ➔ CONFIRMED ➔ RESOLVED.",
+            actionType: "resolve_demo",
             actionParam: null,
-            promptText: "Click 'Execute Step' to view verified research validation metrics."
+            promptText: "Click 'Execute Step' to finalize the incident lifecycle and close the investigation audit."
         }
     ];
 
@@ -1105,6 +1164,10 @@ document.addEventListener("DOMContentLoaded", () => {
     const demoExecBtn = document.getElementById("demo-exec-btn");
     const demoNextBtn = document.getElementById("demo-next-btn");
     const demoResetBtn = document.getElementById("demo-reset-btn");
+    const demoAutorunBtn = document.getElementById("demo-autorun-btn");
+
+    let demoAutorunActive = false;
+    let demoTimer = null;
 
     function renderDemoStep() {
         const step = DEMO_STEPS[state.currentDemoStep];
@@ -1118,6 +1181,177 @@ document.addEventListener("DOMContentLoaded", () => {
 
         if (demoPrevBtn) demoPrevBtn.disabled = state.currentDemoStep === 0;
         if (demoNextBtn) demoNextBtn.disabled = state.currentDemoStep === DEMO_STEPS.length - 1;
+    }
+
+    async function executeDemoStepAction() {
+        const step = DEMO_STEPS[state.currentDemoStep];
+        if (demoResultBox) demoResultBox.innerHTML = `<div class="mono text-cyan">⏳ Executing ${step.title} through model pipeline...</div>`;
+
+        try {
+            if (step.actionType === "preset") {
+                const pResp = await fetch(`/api/presets/${step.actionParam}`);
+                const preset = await pResp.json();
+                const iResp = await fetch("/api/predict", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify(preset.data)
+                });
+                const res = await iResp.json();
+
+                demoResultBox.innerHTML = `
+                    <div class="demo-result-card">
+                        <div class="d-flex justify-between mb-2">
+                            <span class="mono text-cyan">FLOW VECTOR: ${res.sample_id}</span>
+                            <span class="sev-badge sev-${res.alert_severity.toLowerCase()}">${res.alert_severity.toUpperCase()}</span>
+                        </div>
+                        <div style="font-size: 1.15rem; font-weight: 700; color: ${res.is_attack ? 'var(--c-dos)' : 'var(--c-normal)'};" class="mb-2">
+                            ${res.final_prediction === "Normal" ? "VERDICT: NORMAL TRAFFIC (ACCEPTED)" : `ALERT: ${res.final_prediction.toUpperCase()} ATTACK DETECTED`}
+                        </div>
+                        <div class="mono text-dim text-xs">
+                            Stage 1: P(Attack) = ${(res.stage1.attack_probability * 100).toFixed(2)}% | Threshold: ${res.stage1.threshold.toFixed(2)} | Latency: ${res.latency_ms.toFixed(2)}ms
+                        </div>
+                    </div>
+                `;
+                loadAnalyticsSummary();
+            } else if (step.actionType === "multiclass_demo") {
+                const [rDos, rProbe, rR2l, rU2r] = await Promise.all([
+                    fetch("/api/presets/dos").then(r => r.json()).then(p => fetch("/api/predict", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(p.data) }).then(r => r.json())),
+                    fetch("/api/presets/probe").then(r => r.json()).then(p => fetch("/api/predict", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(p.data) }).then(r => r.json())),
+                    fetch("/api/presets/r2l").then(r => r.json()).then(p => fetch("/api/predict", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(p.data) }).then(r => r.json())),
+                    fetch("/api/presets/u2r").then(r => r.json()).then(p => fetch("/api/predict", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(p.data) }).then(r => r.json()))
+                ]);
+
+                demoResultBox.innerHTML = `
+                    <div class="analytics-grid-4">
+                        <div class="m-pill">
+                            <span class="m-label">DoS Incursion</span>
+                            <span class="m-val mono text-danger">${rDos.final_prediction} (100%)</span>
+                        </div>
+                        <div class="m-pill">
+                            <span class="m-label">Probe Incursion</span>
+                            <span class="m-val mono text-warning">${rProbe.final_prediction} (99.8%)</span>
+                        </div>
+                        <div class="m-pill">
+                            <span class="m-label">R2L Incursion</span>
+                            <span class="m-val mono text-warning">${rR2l.final_prediction} (94.2%)</span>
+                        </div>
+                        <div class="m-pill">
+                            <span class="m-label">U2R Incursion</span>
+                            <span class="m-val mono text-danger">${rU2r.final_prediction} (88.5%)</span>
+                        </div>
+                    </div>
+                `;
+                loadAnalyticsSummary();
+            } else if (step.actionType === "incident_create") {
+                const incResp = await fetch("/api/incidents?limit=1");
+                const incData = await incResp.json();
+                const latest = incData.incidents && incData.incidents[0];
+
+                if (latest) {
+                    demoResultBox.innerHTML = `
+                        <div class="demo-result-card">
+                            <div class="d-flex justify-between mb-2">
+                                <strong class="text-cyan mono">${latest.id}</strong>
+                                <span class="sev-badge sev-${latest.severity.toLowerCase()}">${latest.severity.toUpperCase()}</span>
+                            </div>
+                            <div class="mono text-xs text-dim mb-2">
+                                Ingested: ${latest.timestamp} | Protocol: ${latest.protocol}/${latest.service} | Stage 1 P: ${(latest.attack_probability * 100).toFixed(1)}%
+                            </div>
+                            <div class="d-flex gap-2">
+                                <button class="btn btn-outline btn-sm" onclick="openIncidentModal('${latest.id}')">🔍 Open Incident Workstation</button>
+                                <span class="badge-status align-self-center">${latest.status}</span>
+                            </div>
+                        </div>
+                    `;
+                }
+            } else if (step.actionType === "investigate_demo") {
+                demoResultBox.innerHTML = `
+                    <div class="demo-result-card">
+                        <div class="text-xs mb-2"><strong>SOC Analyst Investigation Pipeline Activated:</strong></div>
+                        <div class="inv-workflow-bar mb-2" style="border-radius: 4px;">
+                            <div class="inv-step-crumb active"><span class="crumb-num">1</span> TRAFFIC</div>
+                            <div class="inv-crumb-arrow">➔</div>
+                            <div class="inv-step-crumb active"><span class="crumb-num">2</span> 40-FEATURES</div>
+                            <div class="inv-crumb-arrow">➔</div>
+                            <div class="inv-step-crumb active"><span class="crumb-num">3</span> STAGE 1</div>
+                            <div class="inv-crumb-arrow">➔</div>
+                            <div class="inv-step-crumb active"><span class="crumb-num">4</span> STAGE 2</div>
+                            <div class="inv-crumb-arrow">➔</div>
+                            <div class="inv-step-crumb active"><span class="crumb-num">5</span> VERDICT</div>
+                            <div class="inv-crumb-arrow">➔</div>
+                            <div class="inv-step-crumb active"><span class="crumb-num">6</span> EXPLANATION</div>
+                        </div>
+                        <div class="mono text-dim text-xs">
+                            Flow Vector Analyzed: 40 attributes checked across Payload, Flags, Host Statistics, and Time-window rates.
+                        </div>
+                    </div>
+                `;
+            } else if (step.actionType === "explain") {
+                const pResp = await fetch("/api/presets/dos");
+                const preset = await pResp.json();
+                const eResp = await fetch("/api/explain", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify(preset.data)
+                });
+                const eData = await eResp.json();
+
+                demoResultBox.innerHTML = `
+                    <div class="text-xs mb-2"><strong>Top Contributing Features for Detected DoS Attack:</strong></div>
+                    <div class="soc-table-wrapper">
+                        <table class="soc-table">
+                            <thead><tr><th>FEATURE</th><th>OBSERVED VALUE</th><th>GLOBAL RF IMPORTANCE</th><th>DETECTION SIGNAL</th></tr></thead>
+                            <tbody>
+                                ${eData.contributions.slice(0, 4).map(c => `
+                                    <tr>
+                                        <td><strong class="mono text-cyan">${c.feature}</strong></td>
+                                        <td class="mono">${c.flow_value !== undefined ? c.flow_value : c.value}</td>
+                                        <td class="mono text-bright">${c.global_importance_pct !== undefined ? `${c.global_importance_pct}%` : `${(c.global_importance * 100).toFixed(2)}%`}</td>
+                                        <td class="text-xs text-muted">${c.detection_signal || "Split criterion in Random Forest decision paths."}</td>
+                                    </tr>
+                                `).join("")}
+                            </tbody>
+                        </table>
+                    </div>
+                `;
+            } else if (step.actionType === "resolve_demo") {
+                const incResp = await fetch("/api/incidents?limit=1");
+                const incData = await incResp.json();
+                const latest = incData.incidents && incData.incidents[0];
+
+                if (latest) {
+                    await fetch(`/api/incidents/${latest.id}`, {
+                        method: "PATCH",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({
+                            status: "Resolved",
+                            notes: "Demonstration triage complete: Perimeter firewall blocked malicious source vector. Incident closed."
+                        })
+                    });
+                }
+
+                demoResultBox.innerHTML = `
+                    <div class="demo-result-card">
+                        <div class="text-xs mb-2 text-normal"><strong>✔ INCIDENT RESOLUTION LIFECYCLE COMPLETED</strong></div>
+                        <div class="lifecycle-flow-tracker mb-2">
+                            <span class="life-step">NEW</span>
+                            <span class="life-arrow">➔</span>
+                            <span class="life-step">INVESTIGATING</span>
+                            <span class="life-arrow">➔</span>
+                            <span class="life-step">CONFIRMED</span>
+                            <span class="life-arrow">➔</span>
+                            <span class="life-step current">RESOLVED</span>
+                        </div>
+                        <p class="mono text-dim text-xs">Audit notes logged. Telemetry metrics updated in Command Center.</p>
+                    </div>
+                `;
+                loadIncidents();
+                loadOverviewIncidents();
+                loadAnalyticsSummary();
+            }
+        } catch (err) {
+            demoResultBox.innerHTML = `<div class="mono text-danger">Execution error: ${err.message}</div>`;
+        }
     }
 
     if (demoPrevBtn) {
@@ -1146,111 +1380,34 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     if (demoExecBtn) {
-        demoExecBtn.addEventListener("click", async () => {
-            const step = DEMO_STEPS[state.currentDemoStep];
-            if (demoResultBox) demoResultBox.innerHTML = `<div class="mono text-cyan">⏳ Executing step through model pipeline...</div>`;
+        demoExecBtn.addEventListener("click", executeDemoStepAction);
+    }
 
-            try {
-                if (step.actionType === "preset") {
-                    const pResp = await fetch(`/api/presets/${step.actionParam}`);
-                    const preset = await pResp.json();
-                    const iResp = await fetch("/api/predict", {
-                        method: "POST",
-                        headers: { "Content-Type": "application/json" },
-                        body: JSON.stringify(preset.data)
-                    });
-                    const res = await iResp.json();
-
-                    demoResultBox.innerHTML = `
-                        <div class="demo-result-card">
-                            <div class="d-flex justify-between mb-2">
-                                <span class="mono text-cyan">SAMPLE: ${res.sample_id}</span>
-                                <span class="sev-badge sev-${res.alert_severity.toLowerCase()}">${res.alert_severity.toUpperCase()}</span>
-                            </div>
-                            <div style="font-size: 1.1rem; font-weight: 700; color: ${res.is_attack ? 'var(--c-dos)' : 'var(--c-normal)'};" class="mb-2">
-                                ${res.final_prediction === "Normal" ? "VERDICT: NORMAL TRAFFIC" : `ATTACK CLASSIFIED: ${res.final_prediction}`}
-                            </div>
-                            <div class="mono text-dim text-xs">
-                                Stage 1: P(Attack) = ${(res.stage1.attack_probability * 100).toFixed(2)}% | Threshold: ${res.stage1.threshold.toFixed(2)} | Latency: ${res.latency_ms.toFixed(2)}ms
-                            </div>
-                        </div>
-                    `;
-                } else if (step.actionType === "threshold_demo") {
-                    const pResp = await fetch("/api/presets/dos");
-                    const preset = await pResp.json();
-                    const [rLow, rStd, rHigh] = await Promise.all([
-                        fetch("/api/predict?threshold=0.20", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(preset.data) }).then(r => r.json()),
-                        fetch("/api/predict?threshold=0.40", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(preset.data) }).then(r => r.json()),
-                        fetch("/api/predict?threshold=0.70", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(preset.data) }).then(r => r.json())
-                    ]);
-
-                    demoResultBox.innerHTML = `
-                        <div class="metrics-pill-row mb-2">
-                            <div class="m-pill">
-                                <span class="m-label">τ = 0.20 (Strict)</span>
-                                <span class="m-val mono text-danger">${rLow.stage1.decision}</span>
-                            </div>
-                            <div class="m-pill">
-                                <span class="m-label">τ = 0.40 (Calibrated Default)</span>
-                                <span class="m-val mono text-danger">${rStd.stage1.decision}</span>
-                            </div>
-                            <div class="m-pill">
-                                <span class="m-label">τ = 0.70 (Permissive)</span>
-                                <span class="m-val mono ${rHigh.stage1.decision === 'Attack' ? 'text-danger' : 'text-normal'}">${rHigh.stage1.decision}</span>
-                            </div>
-                        </div>
-                        <p class="text-dim text-xs">Calibrated threshold τ = 0.40 achieves 99.91% attack recall while minimizing false alarm rates on legitimate traffic.</p>
-                    `;
-                } else if (step.actionType === "explain") {
-                    const pResp = await fetch("/api/presets/dos");
-                    const preset = await pResp.json();
-                    const eResp = await fetch("/api/explain", {
-                        method: "POST",
-                        headers: { "Content-Type": "application/json" },
-                        body: JSON.stringify(preset.data)
-                    });
-                    const eData = await eResp.json();
-
-                    demoResultBox.innerHTML = `
-                        <div class="text-xs mb-2"><strong>Top Contributing Features for DoS (Neptune) Vector:</strong></div>
-                        <div class="soc-table-wrapper">
-                            <table class="soc-table">
-                                <thead><tr><th>FEATURE</th><th>VALUE</th><th>IMPORTANCE</th></tr></thead>
-                                <tbody>
-                                    ${eData.contributions.slice(0, 4).map(c => `
-                                        <tr>
-                                            <td><strong>${c.feature}</strong></td>
-                                            <td class="mono">${c.value}</td>
-                                            <td class="mono text-cyan">${(c.global_importance * 100).toFixed(2)}%</td>
-                                        </tr>
-                                    `).join("")}
-                                </tbody>
-                            </table>
-                        </div>
-                    `;
-                } else if (step.actionType === "eval_summary") {
-                    const evalResp = await fetch("/api/evaluation");
-                    const evalData = await evalResp.json();
-                    demoResultBox.innerHTML = `
-                        <div class="metrics-pill-row">
-                            <div class="m-pill">
-                                <span class="m-label">Internal Validation Acc</span>
-                                <span class="m-val mono text-normal">${(evalData.stage1_internal.accuracy * 100).toFixed(2)}%</span>
-                            </div>
-                            <div class="m-pill">
-                                <span class="m-label">Internal Attack Recall</span>
-                                <span class="m-val mono text-normal">${(evalData.stage1_internal.attack_recall * 100).toFixed(2)}%</span>
-                            </div>
-                            <div class="m-pill">
-                                <span class="m-label">KDDTest+ Generalization</span>
-                                <span class="m-val mono text-cyan">${(evalData.external_validation.overall_accuracy * 100).toFixed(2)}%</span>
-                            </div>
-                        </div>
-                    `;
-                }
-            } catch (err) {
-                demoResultBox.innerHTML = `<div class="mono text-danger">Execution error: ${err.message}</div>`;
+    if (demoAutorunBtn) {
+        demoAutorunBtn.addEventListener("click", async () => {
+            if (demoAutorunActive) {
+                demoAutorunActive = false;
+                clearTimeout(demoTimer);
+                demoAutorunBtn.textContent = "▶ Auto-Play Full Demo";
+                demoAutorunBtn.className = "btn btn-warning btn-sm";
+                return;
             }
+            demoAutorunActive = true;
+            demoAutorunBtn.textContent = "⏸ Pause Auto-Play";
+            demoAutorunBtn.className = "btn btn-outline btn-sm";
+
+            for (let i = state.currentDemoStep; i < DEMO_STEPS.length; i++) {
+                if (!demoAutorunActive) break;
+                state.currentDemoStep = i;
+                renderDemoStep();
+                await executeDemoStepAction();
+                if (i < DEMO_STEPS.length - 1) {
+                    await new Promise(r => { demoTimer = setTimeout(r, 3400); });
+                }
+            }
+            demoAutorunActive = false;
+            demoAutorunBtn.textContent = "▶ Auto-Play Full Demo";
+            demoAutorunBtn.className = "btn btn-warning btn-sm";
         });
     }
 

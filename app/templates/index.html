@@ -95,6 +95,12 @@
             <header class="soc-topbar">
                 <div class="topbar-left">
                     <span class="view-breadcrumb" id="view-breadcrumb">COMMAND CENTER // EXECUTIVE OPERATIONS</span>
+                    <div class="topbar-status-bar">
+                        <span class="status-chip chip-online"><span class="chip-dot"></span>ENGINE: ONLINE</span>
+                        <span class="status-chip chip-model">MODEL: RANDOM FOREST ×2</span>
+                        <span class="status-chip chip-source">SOURCE: NSL-KDD / SIMULATION</span>
+                        <span class="status-chip chip-thresh">THRESHOLD: τ = 0.40</span>
+                    </div>
                 </div>
                 <div class="topbar-right">
                     <div class="posture-pill-top" id="topbar-posture-pill">
@@ -1085,6 +1091,7 @@
                                     <button class="btn btn-outline" id="demo-prev-btn" disabled>◀ Previous Step</button>
                                     <button class="btn btn-primary btn-lg" id="demo-exec-btn">⚡ Execute Step</button>
                                     <button class="btn btn-outline" id="demo-next-btn">Next Step ▶</button>
+                                    <button class="btn btn-warning btn-sm" id="demo-autorun-btn">▶ Auto-Play Full Demo</button>
                                     <button class="btn btn-ghost btn-sm" id="demo-reset-btn">Restart Walkthrough</button>
                                 </div>
                             </div>
@@ -1539,10 +1546,43 @@
                 <button class="btn-close-modal" id="modal-close-btn">&times;</button>
             </div>
 
+            <!-- Visual Analyst Investigation Pipeline Breadcrumb -->
+            <div class="inv-workflow-bar">
+                <div class="inv-step-crumb active" id="crumb-traffic">
+                    <span class="crumb-num">1</span>
+                    <span class="crumb-text">TRAFFIC</span>
+                </div>
+                <div class="inv-crumb-arrow">➔</div>
+                <div class="inv-step-crumb active" id="crumb-features">
+                    <span class="crumb-num">2</span>
+                    <span class="crumb-text">FEATURES</span>
+                </div>
+                <div class="inv-crumb-arrow">➔</div>
+                <div class="inv-step-crumb active" id="crumb-stage1">
+                    <span class="crumb-num">3</span>
+                    <span class="crumb-text">STAGE 1 (τ=0.40)</span>
+                </div>
+                <div class="inv-crumb-arrow">➔</div>
+                <div class="inv-step-crumb active" id="crumb-stage2">
+                    <span class="crumb-num">4</span>
+                    <span class="crumb-text">STAGE 2 (MULTICLASS)</span>
+                </div>
+                <div class="inv-crumb-arrow">➔</div>
+                <div class="inv-step-crumb active" id="crumb-verdict">
+                    <span class="crumb-num">5</span>
+                    <span class="crumb-text">VERDICT</span>
+                </div>
+                <div class="inv-crumb-arrow">➔</div>
+                <div class="inv-step-crumb active" id="crumb-explanation">
+                    <span class="crumb-num">6</span>
+                    <span class="crumb-text">EXPLANATION</span>
+                </div>
+            </div>
+
             <div class="modal-body" id="modal-inc-body">
-                <!-- Threat Summary -->
+                <!-- 1. Threat Summary & Telemetry -->
                 <div class="investigation-block">
-                    <div class="inv-block-title">1. THREAT CLASSIFICATION SUMMARY</div>
+                    <div class="inv-block-title">1. TRAFFIC FLOW & THREAT CLASSIFICATION SUMMARY</div>
                     <div class="inv-summary-grid">
                         <div class="inv-kpi">
                             <span class="inv-label">ATTACK FAMILY</span>
@@ -1561,30 +1601,49 @@
                             <span class="inv-val" id="modal-status-badge">New</span>
                         </div>
                     </div>
+                    <div class="inv-traffic-meta-grid mt-2" id="modal-traffic-meta">
+                        <div class="meta-item"><span class="meta-key">PROTOCOL / SERVICE:</span> <span class="meta-val mono" id="modal-proto-svc">tcp / private (S0)</span></div>
+                        <div class="meta-item"><span class="meta-key">PAYLOAD BYTES:</span> <span class="meta-val mono" id="modal-bytes">0 src / 0 dst</span></div>
+                        <div class="meta-item"><span class="meta-key">BURST VELOCITY:</span> <span class="meta-val mono" id="modal-count">255 connections / 2s</span></div>
+                        <div class="meta-item"><span class="meta-key">INGESTION TIME:</span> <span class="meta-val mono" id="modal-timestamp">2026-08-17 18:30:00</span></div>
+                    </div>
                 </div>
 
-                <!-- Detection Pipeline Breakdown -->
+                <!-- 2. Two-Stage Detection Pipeline Breakdown -->
                 <div class="investigation-block">
-                    <div class="inv-block-title">2. TWO-STAGE DETECTION PIPELINE</div>
+                    <div class="inv-block-title">2. TWO-STAGE DETECTION PIPELINE EXECUTION</div>
                     <div class="inv-pipeline-box">
-                        <p id="modal-pipeline-desc">Stage 1 Random Forest detected anomaly with P(Attack) ≥ 0.40 threshold.</p>
-                        <div class="stage2-prob-breakdown" id="modal-stage2-breakdown">
+                        <div class="pipeline-flow-desc" id="modal-pipeline-desc">
+                            Stage 1 Random Forest detected anomaly with P(Attack) ≥ 0.40 threshold.
+                        </div>
+                        <div class="stage2-prob-breakdown mt-2" id="modal-stage2-breakdown">
                             <!-- Populated dynamically -->
                         </div>
                     </div>
                 </div>
 
-                <!-- Transparent Model Feature Contributions -->
+                <!-- 3. Why was this detected? (Explainability & Feature Contributions) -->
                 <div class="investigation-block">
-                    <div class="inv-block-title">3. MODEL FEATURE CONTRIBUTIONS (EXPLAINABILITY)</div>
-                    <p class="text-dim text-xs mb-2">Transparent contribution score based on sample attribute values weighted by Random Forest feature importance:</p>
+                    <div class="inv-block-title">3. WHY WAS THIS DETECTED? (FEATURE ATTRIBUTION & TELEMETRY)</div>
+                    <div class="explainability-distinction-banner mb-2">
+                        <div class="dist-col">
+                            <strong>GLOBAL MODEL FEATURE IMPORTANCE</strong>
+                            <p>Derived directly from Gini impurity reduction across all 100 decision trees in the saved Random Forest model.</p>
+                        </div>
+                        <div class="dist-col">
+                            <strong>CURRENT FLOW OBSERVED VALUES</strong>
+                            <p>The exact NSL-KDD connection attribute values extracted from this specific network flow vector.</p>
+                        </div>
+                    </div>
+
                     <div class="soc-table-wrapper">
                         <table class="soc-table">
                             <thead>
                                 <tr>
-                                    <th>ATTRIBUTE</th>
-                                    <th>SAMPLE VALUE</th>
-                                    <th>GLOBAL IMPORTANCE</th>
+                                    <th>FEATURE</th>
+                                    <th>CURRENT FLOW VALUE</th>
+                                    <th>GLOBAL RF IMPORTANCE</th>
+                                    <th>DETECTION SIGNAL / ANOMALY REASON</th>
                                 </tr>
                             </thead>
                             <tbody id="modal-contributions-tbody">
@@ -1592,19 +1651,31 @@
                             </tbody>
                         </table>
                     </div>
+                    <div class="academic-note-box mt-2">
+                        <strong>Methodology Note:</strong> Global Random Forest feature importances represent model split criteria across the training distribution. They are presented alongside the observed flow values to provide transparent, verifiable attribution without fabricating surrogate approximations.
+                    </div>
                 </div>
 
-                <!-- 40-Feature Snapshot -->
+                <!-- 4. 40-Feature Snapshot -->
                 <div class="investigation-block">
-                    <div class="inv-block-title">4. 40-FEATURE VECTOR SNAPSHOT</div>
+                    <div class="inv-block-title">4. COMPLETE 40-FEATURE VECTOR SNAPSHOT</div>
                     <div class="feature-snapshot-grid" id="modal-features-snapshot">
                         <!-- Populated dynamically -->
                     </div>
                 </div>
 
-                <!-- Incident Lifecycle Management -->
+                <!-- 5. Incident Lifecycle Management -->
                 <div class="investigation-block">
-                    <div class="inv-block-title">5. INCIDENT STATUS & ANALYST TRIAGE</div>
+                    <div class="inv-block-title">5. INCIDENT STATUS & ANALYST TRIAGE LIFECYCLE</div>
+                    <div class="lifecycle-flow-tracker mb-2">
+                        <span class="life-step" id="life-step-new">NEW</span>
+                        <span class="life-arrow">➔</span>
+                        <span class="life-step" id="life-step-investigating">INVESTIGATING</span>
+                        <span class="life-arrow">➔</span>
+                        <span class="life-step" id="life-step-confirmed">CONFIRMED</span>
+                        <span class="life-arrow">➔</span>
+                        <span class="life-step" id="life-step-resolved">RESOLVED</span>
+                    </div>
                     <form id="modal-status-form" class="inv-status-form">
                         <div class="form-item mb-2">
                             <label for="modal-status-select">UPDATE STATUS:</label>
@@ -1616,10 +1687,10 @@
                             </select>
                         </div>
                         <div class="form-item mb-2">
-                            <label for="modal-notes-input">INVESTIGATION NOTES:</label>
-                            <textarea id="modal-notes-input" rows="3" placeholder="Enter triage findings or remediation actions..."></textarea>
+                            <label for="modal-notes-input">INVESTIGATION AUDIT NOTES:</label>
+                            <textarea id="modal-notes-input" rows="3" placeholder="Document triage findings, containment steps, or firewall blocking actions..."></textarea>
                         </div>
-                        <button type="submit" class="btn btn-primary" id="modal-save-status-btn">💾 Update Incident Status</button>
+                        <button type="submit" class="btn btn-primary" id="modal-save-status-btn">💾 Save Incident Audit Record</button>
                     </form>
                 </div>
             </div>

@@ -108,29 +108,88 @@ def get_feature_importance_data() -> Dict[str, Any]:
     return _EXPLAINABILITY_CACHE
 
 
+FEATURE_DESCRIPTIONS = {
+    "src_bytes": "Number of data bytes transmitted from source to destination.",
+    "dst_bytes": "Number of data bytes transmitted from destination back to source.",
+    "flag": "Normal or error status of the TCP connection (e.g. SF, S0, REJ).",
+    "service": "Network destination service/port requested (e.g. http, smtp, private).",
+    "same_srv_rate": "Percentage of connections to the same service in the past 2 seconds.",
+    "diff_srv_rate": "Percentage of connections to different services in the past 2 seconds.",
+    "dst_host_diff_srv_rate": "Percentage of connections to different services across destination host history.",
+    "dst_host_srv_serror_rate": "Percentage of connections with SYN errors to the same service on destination host.",
+    "dst_host_serror_rate": "Percentage of connections with SYN errors on the destination host.",
+    "count": "Number of connections to the same host as the current connection in the past 2 seconds.",
+    "srv_count": "Number of connections to the same service as the current connection in the past 2 seconds.",
+    "logged_in": "1 if successfully logged in; 0 if unauthenticated / guest.",
+    "num_compromised": "Number of compromised conditions encountered on the system.",
+    "root_shell": "1 if root shell access was obtained; 0 otherwise.",
+    "hot": "Number of hot indicators (e.g., accessing system directories, executing programs)."
+}
+
+
 def explain_single_sample(features: Dict[str, Any]) -> List[Dict[str, Any]]:
     """
     Computes transparent feature contributions for a specific connection vector.
-    Calculates sample value prominence weighted by model feature importance.
+    Pairs global Random Forest feature importance with the flow's specific observed values.
+    Does not claim causal SHAP attribution; explicitly states model split importance + observed value.
     """
     imp_data = get_feature_importance_data()
-    stage1_all = {x["feature"]: x["importance"] for x in imp_data["stage1_all_aggregated"]}
+    stage1_list = imp_data["stage1_all_aggregated"]
+
+    # Priority features that are academically verified as key indicators in NSL-KDD
+    priority_keys = [
+        "src_bytes", "dst_bytes", "flag", "service", "same_srv_rate",
+        "diff_srv_rate", "dst_host_diff_srv_rate", "dst_host_srv_serror_rate",
+        "count", "logged_in"
+    ]
 
     explanations = []
-    for feat_name, imp in stage1_all.items():
-        val = features.get(feat_name, 0.0)
-        # Determine deviation significance for numerical features
-        if isinstance(val, (int, float)):
-            score = float(val) * float(imp)
-        else:
-            score = float(imp)
+    for rank, item in enumerate(stage1_list, 1):
+        feat_name = item["feature"]
+        imp = item["importance"]
+        val = features.get(feat_name, 0)
+
+        # Generate technical context signal
+        val_str = str(val)
+        signal = "Within nominal operational baseline."
+
+        if feat_name == "flag":
+            if val == "S0":
+                signal = "SYN without ACK (S0) — signature of TCP SYN flooding / resource exhaustion."
+            elif val == "REJ":
+                signal = "Connection rejected (REJ) — destination port closed / port scan indicator."
+            elif val == "SF":
+                signal = "Normal TCP establishment and termination (SF)."
+        elif feat_name == "src_bytes" and float(val) == 0.0:
+            signal = "Zero source payload — abnormal for non-handshake data streams."
+        elif feat_name == "dst_bytes" and float(val) == 0.0:
+            signal = "Zero destination response bytes — server unreachable or connection dropped."
+        elif feat_name == "dst_host_srv_serror_rate" and float(val) > 0.5:
+            signal = f"High SYN error rate ({float(val)*100:.0f}%) to target service across destination host."
+        elif feat_name == "count" and float(val) > 50:
+            signal = f"High burst velocity ({val} connections in 2s) to identical host."
+        elif feat_name == "diff_srv_rate" and float(val) > 0.5:
+            signal = f"High service diversity ({float(val)*100:.0f}%) — characteristic of port reconnaissance."
+        elif feat_name == "logged_in" and int(val) == 0:
+            signal = "Session unauthenticated (logged_in = 0)."
+        elif feat_name == "root_shell" and int(val) == 1:
+            signal = "CRITICAL: Root shell acquired on target system."
+        elif feat_name == "num_compromised" and float(val) > 0:
+            signal = f"ALERT: {val} compromised system files/indicators detected."
 
         explanations.append({
             "feature": feat_name,
-            "value": str(val),
-            "global_importance": round(imp, 4),
-            "impact_score": round(score, 4)
+            "rank": rank,
+            "value": val_str,
+            "flow_value": val_str,
+            "global_importance": round(imp, 6),
+            "global_importance_pct": round(imp * 100, 2),
+            "description": FEATURE_DESCRIPTIONS.get(feat_name, "Network connection metric."),
+            "detection_signal": signal,
+            "is_priority": feat_name in priority_keys
         })
 
-    explanations.sort(key=lambda x: x["global_importance"], reverse=True)
-    return explanations[:8]
+    # Return top 10 ranked features ensuring verified priority features are prominent
+    explanations.sort(key=lambda x: (not x["is_priority"], x["rank"]))
+    return explanations[:10]
+
