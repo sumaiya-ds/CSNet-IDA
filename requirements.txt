@@ -1,7 +1,11 @@
 numpy
 pandas
 scikit-learn
+joblib
+fastapi
+uvicorn
+pydantic
+jinja2
 matplotlib
 seaborn
-joblib
 jupyter

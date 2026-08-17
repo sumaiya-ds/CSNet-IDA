@@ -1,0 +1,5 @@
+"""
+CSNet-IDA: Two-Stage Machine Learning Intrusion Detection System
+"""
+
+__version__ = "1.0.0"
