@@ -123,15 +123,17 @@ async def api_get_incidents(
     family: Optional[str] = Query(None),
     severity: Optional[str] = Query(None),
     search: Optional[str] = Query(None),
+    sort_by: Optional[str] = Query("timestamp_desc"),
     limit: int = Query(50, ge=1, le=200),
     offset: int = Query(0, ge=0)
 ):
-    """Returns filtered and paginated detected security incidents."""
+    """Returns filtered, sorted, and paginated detected security incidents."""
     return get_incidents(
         status=status,
         family=family,
         severity=severity,
         search=search,
+        sort_by=sort_by,
         limit=limit,
         offset=offset
     )

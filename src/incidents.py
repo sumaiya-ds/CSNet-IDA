@@ -61,11 +61,12 @@ def get_incidents(
     family: Optional[str] = None,
     severity: Optional[str] = None,
     search: Optional[str] = None,
+    sort_by: Optional[str] = "timestamp_desc",
     limit: int = 50,
     offset: int = 0
 ) -> Dict[str, Any]:
     """
-    Retrieves filtered and paginated incidents from in-memory registry.
+    Retrieves filtered, sorted, and paginated incidents from in-memory registry.
     """
     all_records = list(_INCIDENTS_STORE)
     filtered = []
@@ -85,10 +86,26 @@ def get_incidents(
                 or s in inc["attack_family"].lower()
                 or s in inc["service"].lower()
                 or s in inc["protocol"].lower()
+                or s in inc.get("notes", "").lower()
             )
             if not match:
                 continue
         filtered.append(inc)
+
+    # Sorting
+    sev_rank = {"critical": 4, "high": 3, "medium": 2, "low": 1}
+    if sort_by == "severity_desc":
+        filtered.sort(key=lambda x: sev_rank.get(x.get("severity", "low").lower(), 0), reverse=True)
+    elif sort_by == "severity_asc":
+        filtered.sort(key=lambda x: sev_rank.get(x.get("severity", "low").lower(), 0), reverse=False)
+    elif sort_by == "prob_desc":
+        filtered.sort(key=lambda x: x.get("attack_probability", 0.0), reverse=True)
+    elif sort_by == "prob_asc":
+        filtered.sort(key=lambda x: x.get("attack_probability", 0.0), reverse=False)
+    elif sort_by == "timestamp_asc":
+        filtered.sort(key=lambda x: x.get("timestamp", ""))
+    else:  # timestamp_desc (default)
+        filtered.sort(key=lambda x: x.get("timestamp", ""), reverse=True)
 
     total_count = len(filtered)
     paginated = filtered[offset: offset + limit]
@@ -97,6 +114,7 @@ def get_incidents(
         "total": total_count,
         "limit": limit,
         "offset": offset,
+        "sort_by": sort_by or "timestamp_desc",
         "incidents": paginated
     }
 

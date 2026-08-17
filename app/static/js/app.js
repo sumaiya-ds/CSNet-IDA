@@ -120,8 +120,130 @@ document.addEventListener("DOMContentLoaded", () => {
     };
 
     // =========================================================================
-    // 1. Command Center Telemetry & Analytics
+    // 1. Command Center Telemetry, Analytics & Live Traffic Canvas Chart
     // =========================================================================
+    function drawTrafficVelocityChart(timeline) {
+        const canvas = document.getElementById("traffic-velocity-canvas");
+        if (!canvas) return;
+
+        const ctx = canvas.getContext("2d");
+        const rect = canvas.getBoundingClientRect();
+        const dpr = window.devicePixelRatio || 1;
+
+        canvas.width = rect.width * dpr;
+        canvas.height = rect.height * dpr;
+        ctx.scale(dpr, dpr);
+
+        const width = rect.width;
+        const height = rect.height;
+
+        ctx.clearRect(0, 0, width, height);
+
+        const padLeft = 40;
+        const padRight = 20;
+        const padTop = 20;
+        const padBottom = 25;
+        const plotWidth = width - padLeft - padRight;
+        const plotHeight = height - padTop - padBottom;
+
+        // Draw horizontal grid lines & labels
+        ctx.strokeStyle = "rgba(255, 255, 255, 0.06)";
+        ctx.fillStyle = "rgba(148, 163, 184, 0.7)";
+        ctx.font = "9px 'JetBrains Mono', monospace";
+        ctx.textAlign = "right";
+
+        [0, 25, 50, 75, 100].forEach(val => {
+            const y = padTop + plotHeight - (val / 100) * plotHeight;
+            ctx.beginPath();
+            ctx.moveTo(padLeft, y);
+            ctx.lineTo(width - padRight, y);
+            ctx.stroke();
+            ctx.fillText(`${val}%`, padLeft - 6, y + 3);
+        });
+
+        // Threshold Line (τ = 40%)
+        const threshY = padTop + plotHeight - 0.40 * plotHeight;
+        ctx.strokeStyle = "rgba(245, 158, 11, 0.65)";
+        ctx.setLineDash([4, 4]);
+        ctx.beginPath();
+        ctx.moveTo(padLeft, threshY);
+        ctx.lineTo(width - padRight, threshY);
+        ctx.stroke();
+        ctx.setLineDash([]);
+        ctx.fillStyle = "#f59e0b";
+        ctx.textAlign = "left";
+        ctx.fillText("τ = 0.40 Threshold", padLeft + 6, threshY - 4);
+
+        if (!timeline || timeline.length === 0) {
+            ctx.fillStyle = "rgba(148, 163, 184, 0.4)";
+            ctx.textAlign = "center";
+            ctx.font = "11px 'Inter', sans-serif";
+            ctx.fillText("Awaiting network telemetry points (Run simulation or execute inference)...", width / 2, height / 2 + 5);
+            return;
+        }
+
+        const count = Math.min(timeline.length, 25);
+        const dataSlice = timeline.slice(-count);
+        const stepX = plotWidth / Math.max(dataSlice.length - 1, 1);
+
+        // Draw Volume Bars
+        const barWidth = Math.max(4, stepX * 0.45);
+        dataSlice.forEach((item, idx) => {
+            const x = padLeft + idx * stepX - barWidth / 2;
+            const barH = plotHeight * 0.35;
+            const y = padTop + plotHeight - barH;
+
+            ctx.fillStyle = item.is_attack ? "rgba(239, 68, 68, 0.35)" : "rgba(34, 197, 94, 0.25)";
+            ctx.fillRect(x, y, barWidth, barH);
+        });
+
+        // Draw Attack Incursion Rate Line
+        ctx.strokeStyle = "#ef4444";
+        ctx.lineWidth = 2.5;
+        ctx.beginPath();
+
+        let runningAttacks = 0;
+        const points = [];
+
+        dataSlice.forEach((item, idx) => {
+            if (item.is_attack) runningAttacks++;
+            const rate = runningAttacks / (idx + 1);
+            const x = padLeft + idx * stepX;
+            const y = padTop + plotHeight - rate * plotHeight;
+            points.push({ x, y, rate, time: item.timestamp, isAttack: item.is_attack });
+
+            if (idx === 0) ctx.moveTo(x, y);
+            else ctx.lineTo(x, y);
+        });
+
+        ctx.stroke();
+
+        // Draw Line Points & Glow
+        points.forEach(pt => {
+            ctx.fillStyle = pt.isAttack ? "#ef4444" : "#22c55e";
+            ctx.beginPath();
+            ctx.arc(pt.x, pt.y, 3.5, 0, Math.PI * 2);
+            ctx.fill();
+        });
+
+        // Draw latest time stamp label
+        ctx.fillStyle = "rgba(148, 163, 184, 0.8)";
+        ctx.font = "9px 'JetBrains Mono', monospace";
+        ctx.textAlign = "center";
+        if (points.length > 0) {
+            ctx.fillText(points[0].time, points[0].x, height - 6);
+            if (points.length > 1) {
+                ctx.fillText(points[points.length - 1].time, points[points.length - 1].x, height - 6);
+            }
+        }
+    }
+
+    window.addEventListener("resize", () => {
+        if (state.currentView === "command-center") {
+            loadAnalyticsSummary();
+        }
+    });
+
     async function loadAnalyticsSummary() {
         try {
             const resp = await fetch("/api/analytics");
@@ -152,15 +274,18 @@ document.addEventListener("DOMContentLoaded", () => {
                 if (kpiAttackPct) kpiAttackPct.textContent = "0.0%";
             }
 
-            // Security Posture Card & Topbar Pill
+            // Security Posture Card & Risk Score Gauge
             const postureTitle = document.getElementById("posture-state-title");
             const postureBadge = document.getElementById("posture-state-badge");
             const postureDesc = document.getElementById("posture-score-desc");
             const postureFactors = document.getElementById("posture-factors-list");
+            const postureRiskScore = document.getElementById("posture-risk-score");
             const topbarPostureText = document.getElementById("topbar-posture-text");
             const topbarPosturePill = document.getElementById("topbar-posture-pill");
 
             if (postureTitle) postureTitle.textContent = data.posture;
+            if (postureRiskScore) postureRiskScore.textContent = data.risk_score !== undefined ? Math.round(data.risk_score) : 0;
+
             if (postureBadge) {
                 postureBadge.textContent = data.posture_level.toUpperCase();
                 postureBadge.className = `posture-state-badge sev-${data.posture_level}`;
@@ -191,6 +316,18 @@ document.addEventListener("DOMContentLoaded", () => {
                 }
             });
 
+            // Severity Breakdown Meters
+            const sevs = data.severities || {};
+            const sevTotal = data.total_flows || 1;
+            ["critical", "high", "medium", "low"].forEach(sKey => {
+                const count = sevs[sKey] || 0;
+                const pct = data.total_flows > 0 ? ((count / sevTotal) * 100).toFixed(1) : 0;
+                const countEl = document.getElementById(`stat-sev-${sKey}`);
+                const meterEl = document.getElementById(`meter-sev-${sKey}`);
+                if (countEl) countEl.textContent = `${count} (${pct}%)`;
+                if (meterEl) meterEl.style.width = `${pct}%`;
+            });
+
             // Transport Layer Protocol Distribution
             const protos = data.protocols || {};
             const protoTotal = data.total_flows || 1;
@@ -217,6 +354,10 @@ document.addEventListener("DOMContentLoaded", () => {
                     topServicesEl.innerHTML = `<div class="text-dim text-center py-2">Awaiting network telemetry...</div>`;
                 }
             }
+
+            // Draw Live Traffic Velocity Canvas Chart
+            drawTrafficVelocityChart(data.timeline || []);
+
         } catch (e) {
             console.error("Failed to load analytics summary:", e);
         }
@@ -468,6 +609,7 @@ document.addEventListener("DOMContentLoaded", () => {
     const incFilterStatus = document.getElementById("inc-filter-status");
     const incFilterFamily = document.getElementById("inc-filter-family");
     const incFilterSeverity = document.getElementById("inc-filter-severity");
+    const incSortSelect = document.getElementById("inc-sort-select");
     const incSearchInput = document.getElementById("inc-search-input");
     const incRefreshBtn = document.getElementById("inc-refresh-btn");
     const incidentsTbody = document.getElementById("incidents-tbody");
@@ -496,9 +638,10 @@ document.addEventListener("DOMContentLoaded", () => {
         const status = incFilterStatus ? incFilterStatus.value : "all";
         const family = incFilterFamily ? incFilterFamily.value : "all";
         const severity = incFilterSeverity ? incFilterSeverity.value : "all";
+        const sortBy = incSortSelect ? incSortSelect.value : "timestamp_desc";
         const search = incSearchInput ? incSearchInput.value.trim() : "";
 
-        let query = `/api/incidents?limit=100`;
+        let query = `/api/incidents?limit=100&sort_by=${sortBy}`;
         if (status !== "all") query += `&status=${status}`;
         if (family !== "all") query += `&family=${family}`;
         if (severity !== "all") query += `&severity=${severity}`;
@@ -537,6 +680,20 @@ document.addEventListener("DOMContentLoaded", () => {
             console.error("Failed to load incidents:", e);
         }
     }
+
+    window.inspectSampleVector = function(sampleId) {
+        const ev = state.simEvents.find(e => e.sampleId === sampleId);
+        switchTab("connection-inspector");
+        if (ev && ev.features) {
+            for (const [key, value] of Object.entries(ev.features)) {
+                const field = inspectorForm.elements[`f_${key}`] || inspectorForm.elements[key];
+                if (field) field.value = value;
+            }
+            if (presetText) presetText.innerHTML = `<strong>Inspecting Ingested Flow (${sampleId}):</strong> ${ev.hint || "Extracted from Live Monitor"}`;
+            if (presetBanner) presetBanner.style.display = "flex";
+            setTimeout(executeInspectorInference, 100);
+        }
+    };
 
     window.openIncidentModal = async function(incidentId) {
         state.currentIncidentId = incidentId;

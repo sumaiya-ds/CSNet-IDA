@@ -171,6 +171,26 @@
                         </div>
                     </div>
 
+                    <!-- Live Traffic Velocity & Threat Incursion Rate Chart -->
+                    <div class="soc-card mb-3">
+                        <div class="card-head">
+                            <div class="chart-head-left">
+                                <h3>LIVE TRAFFIC VELOCITY & THREAT INCURSION RATE</h3>
+                                <span class="badge-tech">ROLLING TELEMETRY (SIMULATION & INGESTION)</span>
+                            </div>
+                            <div class="chart-legend-row">
+                                <span class="legend-chip"><span class="legend-dot dot-normal"></span> Total Volume</span>
+                                <span class="legend-chip"><span class="legend-dot dot-attack"></span> Incursion Rate (%)</span>
+                                <span class="legend-chip"><span class="legend-dot dot-thresh"></span> Threshold (τ = 0.40)</span>
+                            </div>
+                        </div>
+                        <div class="card-body">
+                            <div class="chart-canvas-container">
+                                <canvas id="traffic-velocity-canvas" height="150"></canvas>
+                            </div>
+                        </div>
+                    </div>
+
                     <!-- Security Posture & Architecture Flow -->
                     <div class="overview-grid-2">
                         <!-- Posture Assessment Card -->
@@ -181,13 +201,21 @@
                             </div>
                             <div class="card-body">
                                 <div class="posture-score-box" id="posture-score-box">
-                                    <div class="posture-score-header">
-                                        <span class="posture-state-title" id="posture-state-title">LOW RISK / NOMINAL</span>
-                                        <span class="posture-state-badge" id="posture-state-badge">NOMINAL</span>
+                                    <div class="posture-score-gauge-row">
+                                        <div class="risk-gauge-circle">
+                                            <span class="risk-score-num mono" id="posture-risk-score">0</span>
+                                            <span class="risk-score-lbl">RISK / 100</span>
+                                        </div>
+                                        <div class="posture-score-text">
+                                            <div class="posture-score-header">
+                                                <span class="posture-state-title" id="posture-state-title">LOW RISK / NOMINAL</span>
+                                                <span class="posture-state-badge" id="posture-state-badge">NOMINAL</span>
+                                            </div>
+                                            <p class="posture-score-desc" id="posture-score-desc">
+                                                Baseline network communications within acceptable limits. No high-confidence multi-vector intrusions detected.
+                                            </p>
+                                        </div>
                                     </div>
-                                    <p class="posture-score-desc" id="posture-score-desc">
-                                        Baseline network communications within acceptable limits. No high-confidence multi-vector intrusions detected.
-                                    </p>
                                     <div class="posture-factors-list" id="posture-factors-list">
                                         <div class="factor-item">● Stage 1 trigger rate within baseline tolerances</div>
                                         <div class="factor-item">● No unauthorized root escalation signatures recorded</div>
@@ -240,8 +268,8 @@
                         </div>
                     </div>
 
-                    <!-- Distributions & Analytics Grid -->
-                    <div class="analytics-grid-3">
+                    <!-- Distributions & Analytics Grid (4 Cards) -->
+                    <div class="analytics-grid-4">
                         <!-- Attack Family Distribution -->
                         <div class="soc-card">
                             <div class="card-head">
@@ -284,6 +312,53 @@
                                             <span class="f-count mono" id="stat-u2r-count">0 flows</span>
                                         </div>
                                         <div class="f-meter-bg"><div class="f-meter-fill fill-u2r" id="meter-u2r-overview" style="width: 0%;"></div></div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Incident Severity Distribution -->
+                        <div class="soc-card">
+                            <div class="card-head">
+                                <h3>SEVERITY DISTRIBUTION</h3>
+                                <span class="badge-tech">TRIAGE</span>
+                            </div>
+                            <div class="card-body">
+                                <div class="family-stat-rows">
+                                    <div class="family-stat-item">
+                                        <div class="f-label-row">
+                                            <span class="f-badge sev-critical">CRITICAL</span>
+                                            <span class="f-name">DoS / U2R Exploits</span>
+                                            <span class="f-count mono" id="stat-sev-critical">0</span>
+                                        </div>
+                                        <div class="f-meter-bg"><div class="f-meter-fill fill-critical" id="meter-sev-critical" style="width: 0%;"></div></div>
+                                    </div>
+
+                                    <div class="family-stat-item">
+                                        <div class="f-label-row">
+                                            <span class="f-badge sev-high">HIGH</span>
+                                            <span class="f-name">R2L Compromises</span>
+                                            <span class="f-count mono" id="stat-sev-high">0</span>
+                                        </div>
+                                        <div class="f-meter-bg"><div class="f-meter-fill fill-high" id="meter-sev-high" style="width: 0%;"></div></div>
+                                    </div>
+
+                                    <div class="family-stat-item">
+                                        <div class="f-label-row">
+                                            <span class="f-badge sev-medium">MEDIUM</span>
+                                            <span class="f-name">Probe Reconnaissance</span>
+                                            <span class="f-count mono" id="stat-sev-medium">0</span>
+                                        </div>
+                                        <div class="f-meter-bg"><div class="f-meter-fill fill-medium" id="meter-sev-medium" style="width: 0%;"></div></div>
+                                    </div>
+
+                                    <div class="family-stat-item">
+                                        <div class="f-label-row">
+                                            <span class="f-badge sev-normal">LOW / NOMINAL</span>
+                                            <span class="f-name">Standard Verified</span>
+                                            <span class="f-count mono" id="stat-sev-low">0</span>
+                                        </div>
+                                        <div class="f-meter-bg"><div class="f-meter-fill fill-normal" id="meter-sev-low" style="width: 0%;"></div></div>
                                     </div>
                                 </div>
                             </div>
@@ -561,8 +636,20 @@
                                 </select>
                             </div>
 
+                            <div class="control-group">
+                                <label for="inc-sort-select">SORT BY:</label>
+                                <select id="inc-sort-select">
+                                    <option value="timestamp_desc">Newest First</option>
+                                    <option value="timestamp_asc">Oldest First</option>
+                                    <option value="severity_desc">Highest Severity</option>
+                                    <option value="severity_asc">Lowest Severity</option>
+                                    <option value="prob_desc">Highest Probability</option>
+                                    <option value="prob_asc">Lowest Probability</option>
+                                </select>
+                            </div>
+
                             <div class="control-group search-group">
-                                <input type="text" id="inc-search-input" placeholder="Search Incident ID, Service...">
+                                <input type="text" id="inc-search-input" placeholder="Search ID, service, protocol, notes...">
                             </div>
                         </div>
 
@@ -1200,7 +1287,7 @@
                                 </div>
 
                                 <div class="cm-section">
-                                    <h4>STAGE 1 CONFUSION MATRIX (NORMAL VS ATTACK)</h4>
+                                    <h4>STAGE 1 BINARY CONFUSION MATRIX (HELD-OUT TEST)</h4>
                                     <div class="cm-table-box">
                                         <table class="cm-table">
                                             <thead>
@@ -1220,6 +1307,53 @@
                                                     <td><strong>Actual Attack</strong></td>
                                                     <td class="cm-cell cm-off">10</td>
                                                     <td class="cm-cell cm-diag">11,716</td>
+                                                </tr>
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </div>
+
+                                <div class="cm-section mt-3">
+                                    <h4>STAGE 2 MULTICLASS CONFUSION MATRIX (11,726 ATTACK SAMPLES)</h4>
+                                    <div class="cm-table-box">
+                                        <table class="cm-table">
+                                            <thead>
+                                                <tr>
+                                                    <th>Actual \ Pred</th>
+                                                    <th>DoS</th>
+                                                    <th>Probe</th>
+                                                    <th>R2L</th>
+                                                    <th>U2R</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                <tr>
+                                                    <td><strong>Actual DoS</strong></td>
+                                                    <td class="cm-cell cm-diag">9,185</td>
+                                                    <td class="cm-cell cm-off">0</td>
+                                                    <td class="cm-cell cm-off">0</td>
+                                                    <td class="cm-cell cm-off">0</td>
+                                                </tr>
+                                                <tr>
+                                                    <td><strong>Actual Probe</strong></td>
+                                                    <td class="cm-cell cm-off">0</td>
+                                                    <td class="cm-cell cm-diag">2,331</td>
+                                                    <td class="cm-cell cm-off">0</td>
+                                                    <td class="cm-cell cm-off">0</td>
+                                                </tr>
+                                                <tr>
+                                                    <td><strong>Actual R2L</strong></td>
+                                                    <td class="cm-cell cm-off">0</td>
+                                                    <td class="cm-cell cm-off">1</td>
+                                                    <td class="cm-cell cm-diag">197</td>
+                                                    <td class="cm-cell cm-off">1</td>
+                                                </tr>
+                                                <tr>
+                                                    <td><strong>Actual U2R</strong></td>
+                                                    <td class="cm-cell cm-off">0</td>
+                                                    <td class="cm-cell cm-off">0</td>
+                                                    <td class="cm-cell cm-off">0</td>
+                                                    <td class="cm-cell cm-diag">11</td>
                                                 </tr>
                                             </tbody>
                                         </table>
@@ -1254,8 +1388,68 @@
                                     </div>
                                 </div>
 
-                                <div class="academic-note-box">
-                                    <strong>Academic Generalization Note:</strong>
+                                <div class="cm-section">
+                                    <h4>EXTERNAL GENERALIZATION 5x5 CONFUSION MATRIX</h4>
+                                    <div class="cm-table-box">
+                                        <table class="cm-table">
+                                            <thead>
+                                                <tr>
+                                                    <th>Actual \ Pred</th>
+                                                    <th>Normal</th>
+                                                    <th>DoS</th>
+                                                    <th>Probe</th>
+                                                    <th>R2L</th>
+                                                    <th>U2R</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                <tr>
+                                                    <td><strong>Normal</strong></td>
+                                                    <td class="cm-cell cm-diag">9,349</td>
+                                                    <td class="cm-cell cm-off">137</td>
+                                                    <td class="cm-cell cm-off">185</td>
+                                                    <td class="cm-cell cm-off">34</td>
+                                                    <td class="cm-cell cm-off">6</td>
+                                                </tr>
+                                                <tr>
+                                                    <td><strong>DoS</strong></td>
+                                                    <td class="cm-cell cm-off">1,751</td>
+                                                    <td class="cm-cell cm-diag">5,698</td>
+                                                    <td class="cm-cell cm-off">9</td>
+                                                    <td class="cm-cell cm-off">0</td>
+                                                    <td class="cm-cell cm-off">0</td>
+                                                </tr>
+                                                <tr>
+                                                    <td><strong>Probe</strong></td>
+                                                    <td class="cm-cell cm-off">510</td>
+                                                    <td class="cm-cell cm-off">102</td>
+                                                    <td class="cm-cell cm-diag">1,809</td>
+                                                    <td class="cm-cell cm-off">0</td>
+                                                    <td class="cm-cell cm-off">0</td>
+                                                </tr>
+                                                <tr>
+                                                    <td><strong>R2L</strong></td>
+                                                    <td class="cm-cell cm-off">2,021</td>
+                                                    <td class="cm-cell cm-off">2</td>
+                                                    <td class="cm-cell cm-off">8</td>
+                                                    <td class="cm-cell cm-diag">723</td>
+                                                    <td class="cm-cell cm-off">0</td>
+                                                </tr>
+                                                <tr>
+                                                    <td><strong>U2R</strong></td>
+                                                    <td class="cm-cell cm-off">163</td>
+                                                    <td class="cm-cell cm-off">0</td>
+                                                    <td class="cm-cell cm-off">0</td>
+                                                    <td class="cm-cell cm-off">2</td>
+                                                    <td class="cm-cell cm-diag">35</td>
+                                                </tr>
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </div>
+
+                                <div class="academic-note-box mt-3">
+                                    <strong>Academic Generalization & Zero-Day Note:</strong>
                                     <p>
                                         The external KDDTest+ evaluation dataset introduces 21 novel attack variants not present during training. As documented in NIDS research, this creates a pronounced domain shift on rare R2L and U2R families, demonstrating real-world zero-day generalization trade-offs.
                                     </p>
