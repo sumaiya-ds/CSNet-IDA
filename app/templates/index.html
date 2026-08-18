@@ -457,8 +457,43 @@
                 <section class="view-panel" id="view-live-monitor">
                     <!-- Simulation Notification Banner -->
                     <div class="sim-alert-banner">
-                        <span class="sim-badge">SIMULATION MODE</span>
-                        <span>This monitor feeds authentic NSL-KDD test vectors into the real two-stage ML inference pipeline in real time. Model predictions are strictly authentic.</span>
+                        <div class="sim-badges-row">
+                            <span class="sim-badge">SIMULATION MODE</span>
+                            <span class="sim-badge sim-badge-source">SOURCE: NSL-KDD VERIFIED PRESETS</span>
+                            <span class="sim-badge sim-badge-threshold">THRESHOLD: τ = 0.40</span>
+                        </div>
+                        <div class="sim-banner-desc">
+                            Deterministic network telemetry workstation evaluating authentic NSL-KDD benchmark vectors through the two-stage Random Forest inference pipeline in real time.
+                        </div>
+                    </div>
+
+                    <!-- Live Telemetry KPI Bar -->
+                    <div class="analytics-grid-5 mb-3">
+                        <div class="kpi-card">
+                            <div class="kpi-label">EVENTS ANALYZED</div>
+                            <div class="kpi-value mono text-bright" id="mon-kpi-total">0</div>
+                            <div class="kpi-sub">Total session flows</div>
+                        </div>
+                        <div class="kpi-card">
+                            <div class="kpi-label">ATTACKS DETECTED</div>
+                            <div class="kpi-value mono text-danger" id="mon-kpi-attacks">0</div>
+                            <div class="kpi-sub" id="mon-kpi-attack-pct">0.0% of traffic</div>
+                        </div>
+                        <div class="kpi-card">
+                            <div class="kpi-label">ATTACK RATE</div>
+                            <div class="kpi-value mono text-warning" id="mon-kpi-rate">0.0%</div>
+                            <div class="kpi-sub">Stage 1 incursion velocity</div>
+                        </div>
+                        <div class="kpi-card">
+                            <div class="kpi-label">ACTIVE CRITICAL</div>
+                            <div class="kpi-value mono text-danger" id="mon-kpi-critical">0</div>
+                            <div class="kpi-sub">Unresolved DoS / U2R</div>
+                        </div>
+                        <div class="kpi-card">
+                            <div class="kpi-label">AVG INFERENCE LATENCY</div>
+                            <div class="kpi-value mono text-cyan" id="mon-kpi-latency">0.00 ms</div>
+                            <div class="kpi-sub">Measured RF execution</div>
+                        </div>
                     </div>
 
                     <!-- Stream Controls Bar -->
@@ -467,12 +502,12 @@
                             <div class="control-group">
                                 <label for="sim-scenario-select">SCENARIO:</label>
                                 <select id="sim-scenario-select">
-                                    <option value="mixed_enterprise">Enterprise Mixed Operations</option>
+                                    <option value="mixed_enterprise">Mixed Incursion (Controlled Sequence)</option>
                                     <option value="baseline_normal">Normal Operations Baseline</option>
-                                    <option value="dos_syn_flood">DoS SYN Flood Campaign</option>
-                                    <option value="port_reconnaissance">Reconnaissance & Port Sweep</option>
-                                    <option value="remote_compromise">R2L Brute-Force & Exploit</option>
-                                    <option value="privilege_escalation">U2R Rootkit Exploitation</option>
+                                    <option value="port_reconnaissance">Port Reconnaissance & Host Sweep</option>
+                                    <option value="dos_syn_flood">DoS Storm (SYN Flood Campaign)</option>
+                                    <option value="remote_compromise">R2L Intrusion Attempt</option>
+                                    <option value="privilege_escalation">U2R Rootkit Escalation</option>
                                 </select>
                             </div>
 
@@ -488,12 +523,17 @@
                             <button class="btn btn-outline" id="stream-replay-btn" title="Replay Scenario from beginning">
                                 <span>🔄 Replay Scenario</span>
                             </button>
+
+                            <button class="btn btn-outline" id="stream-reset-btn" title="Reset Telemetry to Nominal">
+                                <span>♻️ Reset Baseline</span>
+                            </button>
                         </div>
 
                         <div class="controls-right">
                             <div class="control-group">
-                                <label for="stream-speed">STREAM INTERVAL:</label>
+                                <label for="stream-speed">INTERVAL:</label>
                                 <select id="stream-speed">
+                                    <option value="500">0.5 sec (Rapid)</option>
                                     <option value="1000">1.0 sec (Fast)</option>
                                     <option value="2000" selected>2.0 sec (Normal)</option>
                                     <option value="3000">3.0 sec (Slow)</option>
@@ -504,9 +544,9 @@
                                 <label for="stream-filter">FEED FILTER:</label>
                                 <select id="stream-filter">
                                     <option value="all">All Events</option>
+                                    <option value="normal">Normal Only</option>
                                     <option value="attacks">Attacks Only</option>
                                     <option value="critical">Critical Only (DoS/U2R)</option>
-                                    <option value="normal">Normal Only</option>
                                     <option value="dos">DoS Only</option>
                                     <option value="probe">Probe Only</option>
                                     <option value="r2l">R2L Only</option>
@@ -537,20 +577,22 @@
                                     <table class="soc-table" id="stream-table">
                                         <thead>
                                             <tr>
-                                                <th>TIMESTAMP</th>
-                                                <th>FLOW DESCRIPTOR</th>
+                                                <th>SAMPLE ID</th>
+                                                <th>TIME</th>
                                                 <th>PROTO / SVC</th>
+                                                <th>FLAG</th>
                                                 <th>PAYLOAD (SRC/DST)</th>
                                                 <th>STAGE 1 PROB</th>
-                                                <th>STAGE 1 DECISION</th>
-                                                <th>STAGE 2 VERDICT</th>
+                                                <th>VERDICT</th>
+                                                <th>ATTACK FAMILY</th>
                                                 <th>SEVERITY</th>
+                                                <th>INCIDENT ID</th>
                                                 <th>ACTIONS</th>
                                             </tr>
                                         </thead>
                                         <tbody id="stream-tbody">
                                             <tr>
-                                                <td colspan="9" class="table-empty">Stream is paused. Click 'Start Live Stream' or 'Step Once' to begin.</td>
+                                                <td colspan="11" class="table-empty">Stream is paused. Click 'Start Live Stream' or 'Step Once' to begin.</td>
                                             </tr>
                                         </tbody>
                                     </table>
@@ -570,10 +612,14 @@
                                     <div class="latest-flow-box">
                                         <div class="flow-verdict-title" id="latest-flow-verdict">AWAITING STREAM</div>
                                         <div class="flow-verdict-desc" id="latest-flow-desc">Trigger stream simulation to evaluate connection packets.</div>
-                                        <div class="flow-meta-tags">
+                                        <div class="flow-meta-tags mb-2">
                                             <span class="f-tag" id="latest-proto">PROTO: --</span>
                                             <span class="f-tag" id="latest-svc">SVC: --</span>
                                             <span class="f-tag" id="latest-flag">FLAG: --</span>
+                                            <span class="f-tag" id="latest-bytes">BYTES: 0 / 0</span>
+                                        </div>
+                                        <div id="latest-action-container" style="display: none;">
+                                            <button class="btn btn-outline btn-sm w-100" id="latest-investigate-btn">🔍 Investigate Flow Snapshot</button>
                                         </div>
                                     </div>
                                 </div>
@@ -597,6 +643,22 @@
                                             <span class="threshold-label">Threshold: 0.40</span>
                                             <span>1.00 (Attack)</span>
                                         </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Rolling Live Telemetry Canvas Chart -->
+                            <div class="soc-card">
+                                <div class="card-head">
+                                    <h3>ROLLING INFERENCE TELEMETRY</h3>
+                                    <span class="badge-tech">LIVE METRICS</span>
+                                </div>
+                                <div class="card-body">
+                                    <canvas id="monitor-telemetry-canvas" height="150" style="width: 100%; display: block;"></canvas>
+                                    <div class="chart-legend-row mt-2">
+                                        <span class="legend-item"><span class="legend-dot" style="background: #22c55e;"></span> Normal Flow (P &lt; 0.40)</span>
+                                        <span class="legend-item"><span class="legend-dot" style="background: #ef4444;"></span> Attack Flow (P ≥ 0.40)</span>
+                                        <span class="legend-item"><span class="legend-line" style="background: #eab308;"></span> τ = 0.40</span>
                                     </div>
                                 </div>
                             </div>

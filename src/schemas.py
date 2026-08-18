@@ -83,6 +83,7 @@ class PredictionResponse(BaseModel):
     stage2: Optional[Stage2Output] = None
     timestamp: str
     sample_id: Optional[str] = None
+    incident_id: Optional[str] = None
     latency_ms: Optional[float] = None
 
 

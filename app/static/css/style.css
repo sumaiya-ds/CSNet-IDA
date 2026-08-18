@@ -2374,5 +2374,118 @@ body.soc-theme {
     background: rgba(255, 255, 255, 0.05);
 }
 
+/* Phase 4 Live Monitor Enhancements */
+.sim-badges-row {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+    margin-bottom: 0.35rem;
+}
+
+.sim-badge-source {
+    background: rgba(59, 130, 246, 0.18) !important;
+    color: #60a5fa !important;
+    border-color: rgba(59, 130, 246, 0.35) !important;
+}
+
+.sim-badge-threshold {
+    background: rgba(245, 158, 11, 0.18) !important;
+    color: #fbbf24 !important;
+    border-color: rgba(245, 158, 11, 0.35) !important;
+}
+
+.sim-banner-desc {
+    font-size: 0.76rem;
+    color: var(--text-muted);
+    line-height: 1.35;
+}
+
+.proto-tag {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.72rem;
+    font-weight: 700;
+}
+
+.proto-tcp { color: #38bdf8; }
+.proto-udp { color: #a855f7; }
+.proto-icmp { color: #f97316; }
+
+.svc-tag {
+    font-family: 'JetBrains Mono', monospace;
+    color: var(--text-bright);
+}
+
+.decision-tag {
+    display: inline-block;
+    padding: 0.15rem 0.45rem;
+    border-radius: 3px;
+    font-size: 0.7rem;
+    font-family: 'JetBrains Mono', monospace;
+    font-weight: 700;
+}
+
+.decision-attack {
+    background: rgba(239, 68, 68, 0.18);
+    color: #ef4444;
+    border: 1px solid rgba(239, 68, 68, 0.3);
+}
+
+.decision-normal {
+    background: rgba(34, 197, 94, 0.18);
+    color: #22c55e;
+    border: 1px solid rgba(34, 197, 94, 0.3);
+}
+
+.inc-link {
+    font-family: 'JetBrains Mono', monospace;
+    color: var(--c-accent);
+    font-weight: 600;
+    text-decoration: underline;
+    cursor: pointer;
+}
+
+.inc-link:hover {
+    color: #ffffff;
+}
+
+.chart-legend-row {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.85rem;
+    font-size: 0.68rem;
+    color: var(--text-dim);
+    flex-wrap: wrap;
+}
+
+.legend-item {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+}
+
+.legend-dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    display: inline-block;
+}
+
+.legend-line {
+    width: 14px;
+    height: 2px;
+    display: inline-block;
+    border-radius: 1px;
+}
+
+.stream-row-attack:hover {
+    background: rgba(239, 68, 68, 0.08) !important;
+}
+
+.stream-row-normal:hover {
+    background: rgba(34, 197, 94, 0.05) !important;
+}
+
 
 

@@ -274,6 +274,21 @@ document.addEventListener("DOMContentLoaded", () => {
                 if (kpiAttackPct) kpiAttackPct.textContent = "0.0%";
             }
 
+            // Live Monitor KPIs
+            const monTotal = document.getElementById("mon-kpi-total");
+            const monAttacks = document.getElementById("mon-kpi-attacks");
+            const monAttackPct = document.getElementById("mon-kpi-attack-pct");
+            const monRate = document.getElementById("mon-kpi-rate");
+            const monCritical = document.getElementById("mon-kpi-critical");
+            const monLatency = document.getElementById("mon-kpi-latency");
+
+            if (monTotal) monTotal.textContent = data.total_flows;
+            if (monAttacks) monAttacks.textContent = data.attack_flows;
+            if (monAttackPct) monAttackPct.textContent = `${data.attack_rate_pct}% of traffic`;
+            if (monRate) monRate.textContent = `${data.attack_rate_pct}%`;
+            if (monCritical) monCritical.textContent = data.critical_alerts;
+            if (monLatency) monLatency.textContent = `${data.avg_latency_ms} ms`;
+
             // Security Posture Card & Risk Score Gauge
             const postureTitle = document.getElementById("posture-state-title");
             const postureBadge = document.getElementById("posture-state-badge");
@@ -381,8 +396,9 @@ document.addEventListener("DOMContentLoaded", () => {
                 }
             }
 
-            // Draw Live Traffic Velocity Canvas Chart
+            // Draw Live Traffic Velocity Canvas Charts (Command Center & Live Monitor)
             drawTrafficVelocityChart(data.timeline || []);
+            drawMonitorTelemetryChart(data.timeline || []);
 
         } catch (e) {
             console.error("Failed to load analytics summary:", e);
@@ -424,7 +440,7 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     // =========================================================================
-    // 2. Live Monitor & Real-Time Simulation Engine
+    // 2. Live Monitor & Real-Time Simulation Engine (Phase 4 Workstation)
     // =========================================================================
     const simScenarioSelect = document.getElementById("sim-scenario-select");
     const streamToggleBtn = document.getElementById("stream-toggle-btn");
@@ -432,6 +448,7 @@ document.addEventListener("DOMContentLoaded", () => {
     const streamBtnText = document.getElementById("stream-btn-text");
     const streamStepBtn = document.getElementById("stream-step-btn");
     const streamReplayBtn = document.getElementById("stream-replay-btn");
+    const streamResetBtn = document.getElementById("stream-reset-btn");
     const streamClearBtn = document.getElementById("stream-clear-btn");
     const streamSpeedSelect = document.getElementById("stream-speed");
     const streamFilterSelect = document.getElementById("stream-filter");
@@ -447,8 +464,123 @@ document.addEventListener("DOMContentLoaded", () => {
     const latestProto = document.getElementById("latest-proto");
     const latestSvc = document.getElementById("latest-svc");
     const latestFlag = document.getElementById("latest-flag");
+    const latestBytes = document.getElementById("latest-bytes");
+    const latestActionContainer = document.getElementById("latest-action-container");
+    const latestInvestigateBtn = document.getElementById("latest-investigate-btn");
     const streamGaugeVal = document.getElementById("stream-gauge-val");
     const streamGaugeFill = document.getElementById("stream-gauge-fill");
+
+    function drawMonitorTelemetryChart(timeline) {
+        const canvas = document.getElementById("monitor-telemetry-canvas");
+        if (!canvas) return;
+        const ctx = canvas.getContext("2d");
+        if (!ctx) return;
+
+        const width = canvas.clientWidth || 320;
+        const height = canvas.clientHeight || 150;
+        if (canvas.width !== width || canvas.height !== height) {
+            canvas.width = width;
+            canvas.height = height;
+        }
+
+        ctx.clearRect(0, 0, width, height);
+
+        // Background
+        ctx.fillStyle = "#0a0f1d";
+        ctx.fillRect(0, 0, width, height);
+
+        // Grid parameters
+        const padLeft = 34;
+        const padRight = 14;
+        const padTop = 16;
+        const padBottom = 22;
+        const plotWidth = width - padLeft - padRight;
+        const plotHeight = height - padTop - padBottom;
+
+        // Grid lines
+        ctx.strokeStyle = "rgba(51, 65, 85, 0.4)";
+        ctx.lineWidth = 1;
+        ctx.setLineDash([3, 3]);
+
+        [0.0, 0.40, 1.0].forEach(level => {
+            const y = padTop + plotHeight - (level * plotHeight);
+            ctx.beginPath();
+            ctx.moveTo(padLeft, y);
+            ctx.lineTo(width - padRight, y);
+            ctx.stroke();
+
+            ctx.fillStyle = level === 0.40 ? "#eab308" : "rgba(148, 163, 184, 0.6)";
+            ctx.font = "9px 'JetBrains Mono', monospace";
+            ctx.textAlign = "right";
+            ctx.fillText(`${(level * 100).toFixed(0)}%`, padLeft - 4, y + 3);
+        });
+
+        // Golden τ = 0.40 Threshold Line
+        const threshY = padTop + plotHeight - (0.40 * plotHeight);
+        ctx.strokeStyle = "rgba(234, 179, 8, 0.85)";
+        ctx.lineWidth = 1.5;
+        ctx.setLineDash([]);
+        ctx.beginPath();
+        ctx.moveTo(padLeft, threshY);
+        ctx.lineTo(width - padRight, threshY);
+        ctx.stroke();
+
+        ctx.fillStyle = "#eab308";
+        ctx.font = "bold 9px 'JetBrains Mono', monospace";
+        ctx.textAlign = "left";
+        ctx.fillText("τ = 0.40", padLeft + 4, threshY - 4);
+
+        if (!timeline || timeline.length === 0) {
+            ctx.fillStyle = "rgba(148, 163, 184, 0.5)";
+            ctx.font = "11px 'Inter', sans-serif";
+            ctx.textAlign = "center";
+            ctx.fillText("Awaiting flow telemetry...", width / 2, height / 2);
+            return;
+        }
+
+        const items = timeline.slice(-25);
+        const stepX = items.length > 1 ? plotWidth / (items.length - 1) : plotWidth / 2;
+
+        // Draw Volume Bars
+        items.forEach((item, idx) => {
+            const x = items.length === 1 ? padLeft + plotWidth / 2 : padLeft + idx * stepX;
+            const barW = Math.max(4, Math.min(10, stepX * 0.5));
+            const isAttack = item.is_attack;
+            ctx.fillStyle = isAttack ? "rgba(239, 68, 68, 0.2)" : "rgba(34, 197, 94, 0.15)";
+            ctx.fillRect(x - barW / 2, padTop + plotHeight - 32, barW, 32);
+        });
+
+        // Draw Stage 1 Attack Probability Spline
+        ctx.strokeStyle = "#38bdf8";
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+
+        const points = [];
+        items.forEach((item, idx) => {
+            const prob = item.attack_prob !== undefined ? item.attack_prob : (item.is_attack ? 1.0 : 0.0);
+            const x = items.length === 1 ? padLeft + plotWidth / 2 : padLeft + idx * stepX;
+            const y = padTop + plotHeight - (prob * plotHeight);
+            points.push({ x, y, prob, isAttack: item.is_attack, time: item.timestamp, sampleId: item.sample_id });
+
+            if (idx === 0) ctx.moveTo(x, y);
+            else ctx.lineTo(x, y);
+        });
+        ctx.stroke();
+
+        // Draw Glowing Nodes
+        points.forEach(pt => {
+            ctx.fillStyle = pt.isAttack ? "#ef4444" : "#22c55e";
+            ctx.beginPath();
+            ctx.arc(pt.x, pt.y, 3.5, 0, Math.PI * 2);
+            ctx.fill();
+
+            ctx.strokeStyle = pt.isAttack ? "rgba(239, 68, 68, 0.5)" : "rgba(34, 197, 94, 0.5)";
+            ctx.lineWidth = 1.5;
+            ctx.beginPath();
+            ctx.arc(pt.x, pt.y, 5.5, 0, Math.PI * 2);
+            ctx.stroke();
+        });
+    }
 
     async function executeSimulationStep() {
         const scenario = simScenarioSelect ? simScenarioSelect.value : "mixed_enterprise";
@@ -474,13 +606,19 @@ document.addEventListener("DOMContentLoaded", () => {
             // Update Latest Flow Card
             if (latestFlowId) latestFlowId.textContent = pred.sample_id;
             if (latestFlowVerdict) {
-                latestFlowVerdict.textContent = pred.final_prediction === "Normal" ? "VERDICT: NORMAL TRAFFIC" : `ATTACK: ${pred.final_prediction}`;
+                latestFlowVerdict.textContent = pred.final_prediction === "Normal" ? "VERDICT: NORMAL TRAFFIC (ACCEPTED)" : `ATTACK DETECTED: ${pred.final_prediction.toUpperCase()}`;
                 latestFlowVerdict.style.color = isAttack ? "var(--c-dos)" : "var(--c-normal)";
             }
             if (latestFlowDesc) latestFlowDesc.textContent = data.flow_hint;
             if (latestProto) latestProto.textContent = `PROTO: ${features.protocol_type.toUpperCase()}`;
             if (latestSvc) latestSvc.textContent = `SVC: ${features.service}`;
             if (latestFlag) latestFlag.textContent = `FLAG: ${features.flag}`;
+            if (latestBytes) latestBytes.textContent = `BYTES: ${features.src_bytes} / ${features.dst_bytes}`;
+
+            if (latestActionContainer) latestActionContainer.style.display = "block";
+            if (latestInvestigateBtn) {
+                latestInvestigateBtn.onclick = () => openFlowOrIncidentModal(pred.sample_id);
+            }
 
             // Update Gauge
             if (streamGaugeVal) streamGaugeVal.textContent = `${(prob * 100).toFixed(2)}%`;
@@ -488,10 +626,14 @@ document.addEventListener("DOMContentLoaded", () => {
 
             // Append to table
             state.simEvents.unshift({
+                sampleId: pred.sample_id,
+                incidentId: pred.incident_id,
                 timestamp: pred.timestamp.split(" ")[1] || pred.timestamp,
+                fullTimestamp: pred.timestamp,
                 hint: data.flow_hint,
                 proto: features.protocol_type,
                 svc: features.service,
+                flag: features.flag,
                 srcBytes: features.src_bytes,
                 dstBytes: features.dst_bytes,
                 prob: prob,
@@ -499,13 +641,14 @@ document.addEventListener("DOMContentLoaded", () => {
                 finalVerdict: pred.final_prediction,
                 severity: pred.alert_severity,
                 isAttack: isAttack,
-                sampleId: pred.sample_id
+                features: features,
+                prediction: pred
             });
 
             if (state.simEvents.length > 50) state.simEvents.pop();
             renderStreamTable();
 
-            // Refresh summary counters
+            // Refresh summary counters and charts
             loadAnalyticsSummary();
             loadIncidents();
         } catch (err) {
@@ -531,26 +674,118 @@ document.addEventListener("DOMContentLoaded", () => {
         if (streamThreatCounter) streamThreatCounter.textContent = state.simEvents.filter(e => e.isAttack).length;
 
         if (filtered.length === 0) {
-            streamTbody.innerHTML = `<tr><td colspan="9" class="table-empty">No events matching current filter (${filter}).</td></tr>`;
+            streamTbody.innerHTML = `<tr><td colspan="11" class="table-empty">No events matching current filter (${filter}).</td></tr>`;
             return;
         }
 
-        streamTbody.innerHTML = filtered.slice(0, 25).map(e => `
-            <tr>
-                <td>${e.timestamp}</td>
-                <td><strong>${e.hint}</strong></td>
-                <td>${e.proto.toUpperCase()} / ${e.svc}</td>
-                <td>${e.srcBytes} / ${e.dstBytes}</td>
-                <td class="mono">${(e.prob * 100).toFixed(1)}%</td>
-                <td style="color: ${e.isAttack ? 'var(--c-dos)' : 'var(--c-normal)'}; font-weight:600;">${e.stage1Decision}</td>
+        streamTbody.innerHTML = filtered.slice(0, 30).map(e => `
+            <tr class="stream-row-${e.isAttack ? 'attack' : 'normal'}" onclick="openFlowOrIncidentModal('${e.sampleId}')" style="cursor: pointer;" title="Click to open investigation workstation">
+                <td class="mono text-cyan"><strong>${e.sampleId}</strong></td>
+                <td class="mono text-dim">${e.timestamp}</td>
+                <td><span class="proto-tag proto-${e.proto.toLowerCase()}">${e.proto.toUpperCase()}</span> / <span class="svc-tag">${e.svc}</span></td>
+                <td class="mono text-bright">${e.flag}</td>
+                <td class="mono text-dim">${e.srcBytes} / ${e.dstBytes}</td>
+                <td class="mono" style="color: ${e.prob >= 0.4 ? 'var(--c-dos)' : 'var(--c-normal)'}; font-weight: 700;">${(e.prob * 100).toFixed(1)}%</td>
+                <td><span class="decision-tag decision-${e.isAttack ? 'attack' : 'normal'}">${e.stage1Decision}</span></td>
                 <td><span class="f-badge f-${e.finalVerdict.toLowerCase()}">${e.finalVerdict}</span></td>
                 <td><span class="sev-badge sev-${e.severity.toLowerCase()}">${e.severity.toUpperCase()}</span></td>
+                <td class="mono">${e.incidentId ? `<span class="inc-link">${e.incidentId}</span>` : `<span class="text-dim">--</span>`}</td>
                 <td>
-                    <button class="btn btn-ghost btn-sm" onclick="inspectSampleVector('${e.sampleId}')">Inspect</button>
+                    <button class="btn btn-primary btn-sm" onclick="event.stopPropagation(); openFlowOrIncidentModal('${e.sampleId}')">🔍 Investigate</button>
                 </td>
             </tr>
         `).join("");
     }
+
+    window.openFlowOrIncidentModal = async function(sampleId) {
+        const ev = state.simEvents.find(e => e.sampleId === sampleId);
+        if (ev && ev.incidentId) {
+            openIncidentModal(ev.incidentId);
+            return;
+        }
+
+        // If Normal flow or no incident record, open detailed flow modal
+        if (ev) {
+            state.currentIncidentId = null;
+            if (modalIncId) modalIncId.textContent = ev.sampleId;
+            if (modalAttackFamily) {
+                modalAttackFamily.textContent = ev.finalVerdict;
+                modalAttackFamily.className = `inv-val f-badge f-${ev.finalVerdict.toLowerCase()}`;
+            }
+            if (modalSeverity) {
+                modalSeverity.textContent = ev.severity.toUpperCase();
+                modalSeverity.className = `inv-val sev-badge sev-${ev.severity.toLowerCase()}`;
+            }
+            if (modalStage1Prob) modalStage1Prob.textContent = `${(ev.prob * 100).toFixed(2)}%`;
+            if (modalStatusBadge) modalStatusBadge.textContent = ev.isAttack ? "New" : "Normal / Admitted";
+
+            const modalProtoSvc = document.getElementById("modal-proto-svc");
+            const modalBytes = document.getElementById("modal-bytes");
+            const modalCount = document.getElementById("modal-count");
+            const modalTimestamp = document.getElementById("modal-timestamp");
+
+            if (modalProtoSvc) modalProtoSvc.textContent = `${ev.proto.toUpperCase()} / ${ev.svc} (${ev.flag})`;
+            if (modalBytes) modalBytes.textContent = `${ev.srcBytes} src / ${ev.dstBytes} dst bytes`;
+            if (modalCount) modalCount.textContent = ev.features && ev.features.count ? `${ev.features.count} connections / 2s` : "Single flow burst";
+            if (modalTimestamp) modalTimestamp.textContent = ev.fullTimestamp || ev.timestamp;
+
+            if (modalPipelineDesc) {
+                modalPipelineDesc.textContent = ev.isAttack
+                    ? `Stage 1 Binary Random Forest flagged flow with P(Attack) = ${(ev.prob * 100).toFixed(2)}% (Threshold: 0.40) ➔ Routed to Stage 2 ➔ Classified as ${ev.finalVerdict}.`
+                    : `Stage 1 Binary Random Forest determined P(Attack) = ${(ev.prob * 100).toFixed(2)}% (< 0.40 threshold). Connection verified legitimate and admitted safely.`;
+            }
+
+            if (modalStage2Breakdown) {
+                if (ev.prediction && ev.prediction.stage2 && ev.prediction.stage2.probabilities) {
+                    modalStage2Breakdown.innerHTML = Object.entries(ev.prediction.stage2.probabilities).map(([fam, p]) => `
+                        <div class="tree-prob-bar mb-2">
+                            <span class="f-badge f-${fam.toLowerCase()}">${fam}:</span>
+                            <div class="t-bar-bg"><div class="t-bar-fill fill-${fam.toLowerCase()}" style="width: ${(p * 100).toFixed(1)}%;"></div></div>
+                            <span class="mono">${(p * 100).toFixed(1)}%</span>
+                        </div>
+                    `).join("");
+                } else {
+                    modalStage2Breakdown.innerHTML = `<div class="mono text-muted text-xs">Stage 2 Multiclass model bypassed (Traffic is verified Normal).</div>`;
+                }
+            }
+
+            if (modalFeaturesSnapshot) {
+                const feats = ev.features || {};
+                modalFeaturesSnapshot.innerHTML = Object.entries(feats).map(([k, v]) => `
+                    <div class="snap-item">
+                        <span class="snap-k">${k}:</span>
+                        <span class="snap-v">${v}</span>
+                    </div>
+                `).join("");
+            }
+
+            try {
+                const exResp = await fetch("/api/explain", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify(ev.features)
+                });
+                if (exResp.ok) {
+                    const exData = await exResp.json();
+                    const contribs = exData.contributions || [];
+                    if (modalContributionsTbody) {
+                        modalContributionsTbody.innerHTML = contribs.map(c => `
+                            <tr>
+                                <td><strong class="mono text-cyan">${c.feature}</strong></td>
+                                <td class="mono">${c.flow_value !== undefined ? c.flow_value : (c.value !== undefined ? c.value : "--")}</td>
+                                <td class="mono text-bright">${c.global_importance_pct !== undefined ? `${c.global_importance_pct}%` : `${(c.global_importance * 100).toFixed(2)}%`}</td>
+                                <td class="text-xs text-muted">${c.detection_signal || c.description || "Contributes to split decision tree depth."}</td>
+                            </tr>
+                        `).join("");
+                    }
+                }
+            } catch (err) {
+                console.error("Explain fetch error:", err);
+            }
+
+            if (incidentModalOverlay) incidentModalOverlay.style.display = "flex";
+        }
+    };
 
     function startStream() {
         if (state.simRunning) return;
@@ -602,6 +837,22 @@ document.addEventListener("DOMContentLoaded", () => {
         streamReplayBtn.addEventListener("click", () => {
             state.simStepIndex = 0;
             executeSimulationStep();
+        });
+    }
+
+    if (streamResetBtn) {
+        streamResetBtn.addEventListener("click", async () => {
+            try {
+                await fetch("/api/reset", { method: "POST" });
+            } catch (err) {
+                console.error("Reset API error:", err);
+            }
+            state.simEvents = [];
+            state.simStepIndex = 0;
+            renderStreamTable();
+            loadAnalyticsSummary();
+            loadIncidents();
+            loadOverviewIncidents();
         });
     }
 

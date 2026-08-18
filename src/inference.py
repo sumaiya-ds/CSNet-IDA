@@ -129,6 +129,20 @@ def predict_connection(
     timestamp_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     sample_id = f"CONN-{int(datetime.now().timestamp() * 1000) % 1000000:06d}"
 
+    # Escalation: Create incident if an attack is classified
+    incident_id = None
+    if is_attack:
+        temp_dict = {
+            "sample_id": sample_id,
+            "timestamp": timestamp_str,
+            "final_prediction": final_prediction,
+            "alert_severity": alert_severity,
+            "stage1": stage1_result.model_dump(),
+            "stage2": stage2_result.model_dump() if stage2_result else None
+        }
+        inc_data = create_incident(temp_dict, feature_dict)
+        incident_id = inc_data["id"]
+
     response = PredictionResponse(
         success=True,
         final_prediction=final_prediction,
@@ -138,14 +152,9 @@ def predict_connection(
         stage2=stage2_result,
         timestamp=timestamp_str,
         sample_id=sample_id,
+        incident_id=incident_id,
         latency_ms=latency_ms
     )
-
-    # Escalation: Create incident if an attack is classified
-    incident_id = None
-    if is_attack:
-        inc_data = create_incident(response.model_dump(), feature_dict)
-        incident_id = inc_data["id"]
 
     # Session History & Analytics update
     proto = str(feature_dict.get("protocol_type", "tcp")).upper()
