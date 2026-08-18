@@ -152,6 +152,21 @@ def update_incident_status(
     return None
 
 
+def get_active_incidents_counts() -> Dict[str, int]:
+    """
+    Computes real-time counts of active (unresolved) incidents grouped by severity.
+    Resolved incidents are excluded from active threat posture calculations.
+    """
+    counts = {"critical": 0, "high": 0, "medium": 0, "low": 0, "total_active": 0}
+    for inc in _INCIDENTS_STORE:
+        if inc.get("status") != "Resolved":
+            sev = str(inc.get("severity", "low")).lower()
+            if sev in counts:
+                counts[sev] += 1
+            counts["total_active"] += 1
+    return counts
+
+
 def clear_incidents() -> None:
     """Clears all stored incident records."""
     _INCIDENTS_STORE.clear()

@@ -188,8 +188,10 @@ def predict_connection(
     _ANALYTICS_COUNTERS["timeline"].append({
         "timestamp": datetime.now().strftime("%H:%M:%S"),
         "is_attack": is_attack,
+        "attack_prob": round(float(stage1_prob), 4),
         "family": final_prediction,
-        "severity": alert_severity
+        "severity": alert_severity,
+        "sample_id": sample_id
     })
 
     return response
@@ -197,60 +199,58 @@ def predict_connection(
 
 def get_analytics_summary() -> Dict[str, Any]:
     """
-    Computes summary telemetry and calculated security posture based on actual session events.
+    Computes summary telemetry and calculated security posture based on actual session events
+    and current active unresolved incidents.
     """
+    from src.incidents import get_active_incidents_counts
+
     total = _ANALYTICS_COUNTERS["total_flows"]
     attacks = _ANALYTICS_COUNTERS["attack_flows"]
     normals = _ANALYTICS_COUNTERS["normal_flows"]
-    crit = _ANALYTICS_COUNTERS["critical_alerts"]
     avg_lat = round(_ANALYTICS_COUNTERS["total_latency_ms"] / total, 2) if total > 0 else 0.0
-
     attack_rate = round((attacks / total) * 100, 1) if total > 0 else 0.0
 
-    # Calculate Telemetry Security Posture Index & Risk Score (0 - 100)
-    if total == 0:
+    active_counts = get_active_incidents_counts()
+    active_crit = active_counts["critical"]
+    active_high = active_counts["high"]
+    active_med = active_counts["medium"]
+    active_low = active_counts["low"]
+    total_active = active_counts["total_active"]
+
+    # Security Posture derived directly from active unresolved incidents
+    if total_active == 0:
+        posture = "NOMINAL"
+        posture_level = "low"
+        posture_factors = [
+            "No active security incidents requiring analyst intervention",
+            "Network flow baseline operations normal"
+        ]
         risk_score = 0.0
-        posture = "IDLE / NO TRAFFIC"
-        posture_level = "info"
-        posture_factors = ["Awaiting network flow ingestion"]
-    else:
-        crit_count = _ANALYTICS_COUNTERS["severities"].get("critical", 0)
-        high_count = _ANALYTICS_COUNTERS["severities"].get("high", 0)
-        med_count = _ANALYTICS_COUNTERS["severities"].get("medium", 0)
-        threat_weight = (crit_count * 8) + (high_count * 4) + (med_count * 1)
-        base_score = (attacks / total) * 60.0 + min(40.0, float(threat_weight))
-        risk_score = round(min(100.0, max(0.0, base_score)), 1)
+    elif active_crit > 0:
+        posture = "CRITICAL"
+        posture_level = "critical"
+        posture_factors = [
+            f"{active_crit} active Critical incident(s) (DoS flooding or U2R root access)",
+            "Immediate SOC containment action required"
+        ]
+        risk_score = round(min(100.0, 75.0 + active_crit * 5.0), 1)
+    elif active_high > 0:
+        posture = "HIGH"
+        posture_level = "high"
+        posture_factors = [
+            f"{active_high} active High incident(s) (R2L unauthorized penetration)",
+            "Active adversary access attempts detected"
+        ]
+        risk_score = round(min(74.0, 50.0 + active_high * 6.0), 1)
+    else:  # active medium / low incidents
+        posture = "ELEVATED"
+        posture_level = "medium"
+        posture_factors = [
+            f"{active_med + active_low} active reconnaissance / probe incident(s)",
+            "Network port mapping or host sweep activity flagged"
+        ]
+        risk_score = round(min(49.0, 20.0 + (active_med + active_low) * 4.0), 1)
 
-        if risk_score >= 70.0 or crit_count >= 5:
-            posture = "CRITICAL THREAT"
-            posture_level = "critical"
-            posture_factors = [
-                f"High malicious flow velocity ({attack_rate}%)",
-                f"{crit_count} Critical incidents (DoS / U2R privilege escalation)"
-            ]
-        elif risk_score >= 40.0 or (crit_count + high_count) >= 3:
-            posture = "ELEVATED RISK"
-            posture_level = "high"
-            posture_factors = [
-                f"Elevated attack rate ({attack_rate}%)",
-                f"{high_count} R2L compromise attempts or reconnaissance activity"
-            ]
-        elif risk_score >= 15.0 or attacks > 0:
-            posture = "MODERATE RISK"
-            posture_level = "medium"
-            posture_factors = [
-                f"Isolated threat incursions detected ({attacks} attacks)",
-                "Stage 1 trigger rate within expected operational bounds"
-            ]
-        else:
-            posture = "LOW RISK / NOMINAL"
-            posture_level = "low"
-            posture_factors = [
-                "95%+ legitimate network traffic baseline",
-                "Zero active root escalation or high-volume flood signatures"
-            ]
-
-    # Top 5 services
     sorted_services = sorted(_ANALYTICS_COUNTERS["services"].items(), key=lambda x: x[1], reverse=True)[:5]
 
     return {
@@ -258,15 +258,16 @@ def get_analytics_summary() -> Dict[str, Any]:
         "normal_flows": normals,
         "attack_flows": attacks,
         "attack_rate_pct": attack_rate,
-        "critical_alerts": crit,
+        "critical_alerts": active_crit,
+        "total_active_incidents": total_active,
         "avg_latency_ms": avg_lat,
         "risk_score": risk_score,
         "posture": posture,
         "posture_level": posture_level,
         "posture_factors": posture_factors,
-        "protocols": _ANALYTICS_COUNTERS["protocols"],
-        "families": _ANALYTICS_COUNTERS["families"],
-        "severities": _ANALYTICS_COUNTERS["severities"],
+        "protocols": dict(_ANALYTICS_COUNTERS["protocols"]),
+        "families": dict(_ANALYTICS_COUNTERS["families"]),
+        "severities": dict(_ANALYTICS_COUNTERS["severities"]),
         "top_services": sorted_services,
         "timeline": list(_ANALYTICS_COUNTERS["timeline"])
     }

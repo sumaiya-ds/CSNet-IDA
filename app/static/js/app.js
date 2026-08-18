@@ -606,9 +606,18 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     if (streamClearBtn) {
-        streamClearBtn.addEventListener("click", () => {
+        streamClearBtn.addEventListener("click", async () => {
+            try {
+                await fetch("/api/reset", { method: "POST" });
+            } catch (err) {
+                console.error("Reset API error:", err);
+            }
             state.simEvents = [];
+            state.simStepIndex = 0;
             renderStreamTable();
+            loadAnalyticsSummary();
+            loadIncidents();
+            loadOverviewIncidents();
         });
     }
 
@@ -869,7 +878,7 @@ document.addEventListener("DOMContentLoaded", () => {
         });
     }
 
-    [incFilterStatus, incFilterFamily, incFilterSeverity].forEach(sel => {
+    [incFilterStatus, incFilterFamily, incFilterSeverity, incSortSelect].forEach(sel => {
         if (sel) sel.addEventListener("change", loadIncidents);
     });
 

@@ -270,11 +270,13 @@ async def api_get_history(limit: int = Query(50, ge=1, le=100)):
 
 
 @app.post("/api/history/clear")
+@app.post("/api/reset")
+@app.post("/api/simulation/reset")
 async def api_clear_history():
-    """Clears in-memory analysis history and counters."""
+    """Clears in-memory analysis history, telemetry counters, and incident registry."""
     clear_history()
     clear_incidents()
-    return {"success": True, "message": "Analysis history and incident registry cleared"}
+    return {"success": True, "message": "Analysis history, flow telemetry, and incident registry reset to NOMINAL baseline."}
 
 
 @app.get("/api/health")

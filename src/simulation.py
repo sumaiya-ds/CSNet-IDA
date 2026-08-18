@@ -12,39 +12,45 @@ from src.inference import predict_connection
 SCENARIOS: Dict[str, Dict[str, Any]] = {
     "mixed_enterprise": {
         "id": "mixed_enterprise",
-        "name": "Enterprise Mixed Operations",
-        "description": "Standard corporate network profile with background HTTP/SMTP/DNS traffic and intermittent threat incursions.",
-        "distribution": {"normal": 0.65, "dos": 0.15, "probe": 0.10, "r2l": 0.07, "u2r": 0.03}
+        "name": "Mixed Incursion (Controlled Sequence)",
+        "description": "Standard sequence: Normal ➔ Normal ➔ Probe ➔ Probe ➔ DoS ➔ DoS ➔ R2L ➔ U2R.",
+        "distribution": {"normal": 0.25, "probe": 0.25, "dos": 0.25, "r2l": 0.125, "u2r": 0.125},
+        "sequence": ["normal", "normal", "probe", "probe", "dos", "dos", "r2l", "u2r"]
     },
     "baseline_normal": {
         "id": "baseline_normal",
         "name": "Normal Operations Baseline",
         "description": "Exclusively legitimate enterprise network communications (HTTP, SMTP, Domain DNS, FTP-Data).",
-        "distribution": {"normal": 1.0, "dos": 0.0, "probe": 0.0, "r2l": 0.0, "u2r": 0.0}
-    },
-    "dos_syn_flood": {
-        "id": "dos_syn_flood",
-        "name": "DoS SYN Flood Campaign",
-        "description": "High-volume resource exhaustion attacks (Neptune TCP SYN flood and Smurf ICMP broadcast amplification).",
-        "distribution": {"normal": 0.15, "dos": 0.75, "probe": 0.10, "r2l": 0.0, "u2r": 0.0}
+        "distribution": {"normal": 1.0, "dos": 0.0, "probe": 0.0, "r2l": 0.0, "u2r": 0.0},
+        "sequence": ["normal", "normal", "normal", "normal", "normal", "normal"]
     },
     "port_reconnaissance": {
         "id": "port_reconnaissance",
-        "name": "Reconnaissance & Port Sweep",
+        "name": "Port Reconnaissance & Host Sweep",
         "description": "Active network mapping, host discovery sweeps (IPSweep), and port scanning (Satan/Nmap).",
-        "distribution": {"normal": 0.20, "dos": 0.0, "probe": 0.75, "r2l": 0.05, "u2r": 0.0}
+        "distribution": {"normal": 0.0, "probe": 1.0, "dos": 0.0, "r2l": 0.0, "u2r": 0.0},
+        "sequence": ["probe", "probe", "probe", "probe", "probe"]
+    },
+    "dos_syn_flood": {
+        "id": "dos_syn_flood",
+        "name": "DoS Storm (SYN Flood Campaign)",
+        "description": "High-volume resource exhaustion attacks (Neptune TCP SYN flood and Smurf ICMP broadcast amplification).",
+        "distribution": {"normal": 0.0, "dos": 1.0, "probe": 0.0, "r2l": 0.0, "u2r": 0.0},
+        "sequence": ["dos", "dos", "dos", "dos", "dos"]
     },
     "remote_compromise": {
         "id": "remote_compromise",
-        "name": "R2L Brute-Force & Exploit",
+        "name": "R2L Intrusion Attempt (Warez / Password Guess)",
         "description": "Remote unauthorized access attempts, telnet password guessing, and rogue FTP downloads.",
-        "distribution": {"normal": 0.25, "dos": 0.0, "probe": 0.05, "r2l": 0.70, "u2r": 0.0}
+        "distribution": {"normal": 0.0, "r2l": 1.0, "probe": 0.0, "dos": 0.0, "u2r": 0.0},
+        "sequence": ["r2l", "r2l", "r2l", "r2l"]
     },
     "privilege_escalation": {
         "id": "privilege_escalation",
-        "name": "U2R Rootkit Exploitation",
+        "name": "U2R Rootkit Escalation",
         "description": "Local privilege escalation attacks attempting root shell acquisition (Rootkit, Buffer Overflow).",
-        "distribution": {"normal": 0.30, "dos": 0.0, "probe": 0.0, "r2l": 0.0, "u2r": 0.70}
+        "distribution": {"normal": 0.0, "u2r": 1.0, "probe": 0.0, "dos": 0.0, "r2l": 0.0},
+        "sequence": ["u2r", "u2r", "u2r", "u2r"]
     }
 }
 
@@ -63,6 +69,23 @@ def generate_simulation_step(
     Generates a single deterministic simulation step for a chosen scenario.
     Evaluates the connection vector against the REAL two-stage inference model.
     """
+    # Normalize scenario ID aliases
+    alias_map = {
+        "normal": "baseline_normal",
+        "normal_baseline": "baseline_normal",
+        "probe": "port_reconnaissance",
+        "dos": "dos_syn_flood",
+        "dos_storm": "dos_syn_flood",
+        "r2l": "remote_compromise",
+        "r2l_intrusion": "remote_compromise",
+        "u2r": "privilege_escalation",
+        "u2r_escalation": "privilege_escalation",
+        "mixed": "mixed_enterprise",
+        "mixed_incursion": "mixed_enterprise"
+    }
+    normalized_id = alias_map.get(scenario_id, scenario_id)
+    scenario = SCENARIOS.get(normalized_id, SCENARIOS["mixed_enterprise"])
+
     if seed is not None:
         rng = random.Random(seed + (step_index or 0))
     elif step_index is not None:
@@ -70,45 +93,26 @@ def generate_simulation_step(
     else:
         rng = random.Random()
 
-    scenario = SCENARIOS.get(scenario_id, SCENARIOS["mixed_enterprise"])
-    dist = scenario["distribution"]
-
-    # Choose category based on distribution
-    categories = list(dist.keys())
-    weights = list(dist.values())
-    chosen_cat = rng.choices(categories, weights=weights, k=1)[0]
-
-    # Select authentic vector from STREAM_SAMPLES matching category
-    matched_samples = []
-    for s in STREAM_SAMPLES:
-        label = s["ground_truth_label"].lower()
-        if chosen_cat == "normal" and label == "normal":
-            matched_samples.append(s)
-        elif chosen_cat == "dos" and label in ("neptune", "smurf", "pod", "back", "teardrop"):
-            matched_samples.append(s)
-        elif chosen_cat == "probe" and label in ("ipsweep", "satan", "nmap", "portsweep"):
-            matched_samples.append(s)
-        elif chosen_cat == "r2l" and label in ("warezclient", "guess_passwd", "ftp_write"):
-            matched_samples.append(s)
-        elif chosen_cat == "u2r" and label in ("rootkit", "buffer_overflow", "loadmodule"):
-            matched_samples.append(s)
-
-    if not matched_samples:
-        # Fallback to preset if not found in stream samples
-        preset_key = chosen_cat
-        if preset_key in PRESETS:
-            sample_data = PRESETS[preset_key]["data"]
-            flow_hint = PRESETS[preset_key]["name"]
-            ground_truth = PRESETS[preset_key]["label"]
-        else:
-            sample_data = PRESETS["normal"]["data"]
-            flow_hint = "Normal Traffic"
-            ground_truth = "normal"
+    # Determine category
+    seq = scenario.get("sequence", [])
+    if seq and step_index is not None:
+        chosen_cat = seq[step_index % len(seq)]
     else:
-        chosen_sample = rng.choice(matched_samples)
-        sample_data = chosen_sample["data"]
-        flow_hint = chosen_sample["flow_hint"]
-        ground_truth = chosen_sample["ground_truth_label"]
+        dist = scenario["distribution"]
+        categories = list(dist.keys())
+        weights = list(dist.values())
+        chosen_cat = rng.choices(categories, weights=weights, k=1)[0]
+
+    # For deterministic scenarios, use the verified PRESET data directly
+    preset_key = chosen_cat.lower()
+    if preset_key in PRESETS:
+        sample_data = PRESETS[preset_key]["data"]
+        flow_hint = PRESETS[preset_key]["name"]
+        ground_truth = PRESETS[preset_key]["label"]
+    else:
+        sample_data = PRESETS["normal"]["data"]
+        flow_hint = "Normal Traffic"
+        ground_truth = "normal"
 
     # Run REAL inference through the model
     prediction_result = predict_connection(sample_data)
