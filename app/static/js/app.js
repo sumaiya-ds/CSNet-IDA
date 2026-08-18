@@ -890,7 +890,7 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     // =========================================================================
-    // 3. Incident Management Center & Investigation Modal
+    // 3. Incident Management Center & Investigation Workstation 2.0
     // =========================================================================
     const incFilterStatus = document.getElementById("inc-filter-status");
     const incFilterFamily = document.getElementById("inc-filter-family");
@@ -906,6 +906,7 @@ document.addEventListener("DOMContentLoaded", () => {
     const incidentModalOverlay = document.getElementById("incident-modal-overlay");
     const modalCloseBtn = document.getElementById("modal-close-btn");
     const modalIncId = document.getElementById("modal-inc-id");
+    const modalSampleIdBadge = document.getElementById("modal-sample-id-badge");
     const modalAttackFamily = document.getElementById("modal-attack-family");
     const modalSeverity = document.getElementById("modal-severity");
     const modalStage1Prob = document.getElementById("modal-stage1-prob");
@@ -916,7 +917,16 @@ document.addEventListener("DOMContentLoaded", () => {
     const modalFeaturesSnapshot = document.getElementById("modal-features-snapshot");
     const modalStatusForm = document.getElementById("modal-status-form");
     const modalStatusSelect = document.getElementById("modal-status-select");
+    const modalAnalystName = document.getElementById("modal-analyst-name");
     const modalNotesInput = document.getElementById("modal-notes-input");
+    const modalQuickInvestigateBtn = document.getElementById("modal-quick-investigate-btn");
+    const modalQuickConfirmBtn = document.getElementById("modal-quick-confirm-btn");
+    const modalQuickResolveBtn = document.getElementById("modal-quick-resolve-btn");
+    const modalAddNoteForm = document.getElementById("modal-add-note-form");
+    const modalNewNoteText = document.getElementById("modal-new-note-text");
+    const modalNotesStream = document.getElementById("modal-notes-stream");
+    const modalAuditTbody = document.getElementById("modal-audit-tbody");
+    const modalRelatedTbody = document.getElementById("modal-related-tbody");
 
     async function loadIncidents() {
         if (!incidentsTbody) return;
@@ -943,22 +953,24 @@ document.addEventListener("DOMContentLoaded", () => {
             if (navIncidentCount) navIncidentCount.textContent = data.total;
 
             if (incidents.length === 0) {
-                incidentsTbody.innerHTML = `<tr><td colspan="9" class="table-empty">No security incidents found matching filter criteria.</td></tr>`;
+                incidentsTbody.innerHTML = `<tr><td colspan="11" class="table-empty">No security incidents found matching filter criteria.</td></tr>`;
                 return;
             }
 
             incidentsTbody.innerHTML = incidents.map(inc => `
-                <tr>
-                    <td><strong class="text-cyan">${inc.id}</strong></td>
-                    <td>${inc.timestamp}</td>
+                <tr onclick="openIncidentModal('${inc.id}')" style="cursor: pointer;" class="incident-row" title="Click to open investigation workstation">
+                    <td class="mono text-cyan"><strong>${inc.id}</strong></td>
+                    <td class="mono text-dim">${inc.sample_id || "CONN----"}</td>
+                    <td class="mono text-dim">${inc.timestamp}</td>
                     <td><span class="f-badge f-${inc.attack_family.toLowerCase()}">${inc.attack_family}</span></td>
                     <td><span class="sev-badge sev-${inc.severity.toLowerCase()}">${inc.severity.toUpperCase()}</span></td>
-                    <td class="mono">${(inc.attack_probability * 100).toFixed(1)}%</td>
-                    <td>${inc.protocol} / ${inc.service} (${inc.flag})</td>
-                    <td>${inc.src_bytes} / ${inc.dst_bytes}</td>
-                    <td><span class="badge-status">${inc.status}</span></td>
+                    <td class="mono" style="color: ${inc.attack_probability >= 0.4 ? 'var(--c-dos)' : 'var(--c-normal)'}; font-weight:700;">${(inc.attack_probability * 100).toFixed(1)}%</td>
+                    <td><span class="proto-tag proto-${(inc.protocol || 'tcp').toLowerCase()}">${(inc.protocol || 'tcp').toUpperCase()}</span> / <span class="svc-tag">${inc.service}</span></td>
+                    <td class="mono text-bright">${inc.flag || "SF"}</td>
+                    <td class="mono text-dim">${inc.src_bytes} / ${inc.dst_bytes}</td>
+                    <td><span class="badge-status status-${inc.status.toLowerCase()}">${inc.status}</span></td>
                     <td>
-                        <button class="btn btn-primary btn-sm" onclick="openIncidentModal('${inc.id}')">Investigate</button>
+                        <button class="btn btn-primary btn-sm" onclick="event.stopPropagation(); openIncidentModal('${inc.id}')">🔍 Investigate</button>
                     </td>
                 </tr>
             `).join("");
@@ -981,46 +993,83 @@ document.addEventListener("DOMContentLoaded", () => {
         }
     };
 
+    async function transitionStatus(incidentId, newStatus, defaultNote = "") {
+        try {
+            const analyst = (modalAnalystName && modalAnalystName.value.trim()) || "SOC Analyst";
+            const resp = await fetch(`/api/incidents/${incidentId}/status`, {
+                method: "PATCH",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    status: newStatus,
+                    notes: defaultNote,
+                    analyst: analyst
+                })
+            });
+
+            if (!resp.ok) {
+                const errData = await resp.json();
+                alert(`Transition rejected: ${errData.detail || "Invalid lifecycle transition"}`);
+                return;
+            }
+
+            // Reload workstation and table
+            await openIncidentModal(incidentId);
+            loadIncidents();
+            loadOverviewIncidents();
+            loadAnalyticsSummary();
+        } catch (err) {
+            console.error("Status transition error:", err);
+            alert("Failed to update status.");
+        }
+    }
+
     window.openIncidentModal = async function(incidentId) {
         state.currentIncidentId = incidentId;
         try {
-            const resp = await fetch(`/api/incidents/${incidentId}`);
-            if (!resp.ok) throw new Error("Incident detail fetch failed");
-            const data = await resp.json();
-            const inc = data.incident;
-            const contribs = data.feature_contributions || [];
+            // Fetch complete evidence package
+            const resp = await fetch(`/api/incidents/${incidentId}/evidence`);
+            if (!resp.ok) throw new Error("Incident evidence fetch failed");
+            const evData = await resp.json();
 
-            if (modalIncId) modalIncId.textContent = inc.id;
+            if (modalIncId) modalIncId.textContent = evData.incident_id;
+            if (modalSampleIdBadge) modalSampleIdBadge.textContent = `SAMPLE: ${evData.sample_id}`;
             if (modalAttackFamily) {
-                modalAttackFamily.textContent = inc.attack_family;
-                modalAttackFamily.className = `inv-val f-badge f-${inc.attack_family.toLowerCase()}`;
+                modalAttackFamily.textContent = evData.attack_family;
+                modalAttackFamily.className = `inv-val f-badge f-${evData.attack_family.toLowerCase()}`;
             }
             if (modalSeverity) {
-                modalSeverity.textContent = inc.severity.toUpperCase();
-                modalSeverity.className = `inv-val sev-badge sev-${inc.severity.toLowerCase()}`;
+                modalSeverity.textContent = evData.severity.toUpperCase();
+                modalSeverity.className = `inv-val sev-badge sev-${evData.severity.toLowerCase()}`;
             }
-            if (modalStage1Prob) modalStage1Prob.textContent = `${(inc.attack_probability * 100).toFixed(2)}%`;
-            if (modalStatusBadge) modalStatusBadge.textContent = inc.status;
+            if (modalStage1Prob) modalStage1Prob.textContent = `${(evData.stage1_probability * 100).toFixed(2)}%`;
+            if (modalStatusBadge) {
+                modalStatusBadge.textContent = evData.status;
+                modalStatusBadge.className = `inv-val badge-status status-${evData.status.toLowerCase()}`;
+            }
+
+            const traceFamily = document.getElementById("modal-trace-family");
+            if (traceFamily) traceFamily.textContent = `${evData.attack_family} Incursion`;
 
             // Traffic Meta Info
+            const obs = evData.observed_features_summary || {};
             const modalProtoSvc = document.getElementById("modal-proto-svc");
             const modalBytes = document.getElementById("modal-bytes");
             const modalCount = document.getElementById("modal-count");
             const modalTimestamp = document.getElementById("modal-timestamp");
 
-            if (modalProtoSvc) modalProtoSvc.textContent = `${inc.protocol} / ${inc.service} (${inc.flag})`;
-            if (modalBytes) modalBytes.textContent = `${inc.src_bytes} src / ${inc.dst_bytes} dst bytes`;
-            if (modalCount) modalCount.textContent = inc.features && inc.features.count ? `${inc.features.count} connections / 2s` : "Single flow burst";
-            if (modalTimestamp) modalTimestamp.textContent = inc.timestamp;
+            if (modalProtoSvc) modalProtoSvc.textContent = `${obs.protocol || 'TCP'} / ${obs.service || 'http'} (${obs.flag || 'SF'})`;
+            if (modalBytes) modalBytes.textContent = `${obs.src_bytes || 0} src / ${obs.dst_bytes || 0} dst bytes`;
+            if (modalCount) modalCount.textContent = `${obs.count || 1} connections in 2s (Same srv: ${((obs.same_srv_rate || 1) * 100).toFixed(0)}%)`;
+            if (modalTimestamp) modalTimestamp.textContent = evData.timestamp;
 
-            // Pipeline Execution
+            // Pipeline Execution Description
             if (modalPipelineDesc) {
-                modalPipelineDesc.textContent = `Stage 1 Binary Random Forest flagged flow with P(Attack) = ${(inc.attack_probability * 100).toFixed(2)}% (Calibrated threshold: ${inc.stage1_threshold.toFixed(2)}) ➔ Routed to Stage 2 Multiclass model ➔ Classified as ${inc.attack_family}.`;
+                modalPipelineDesc.textContent = `Stage 1 Binary Random Forest flagged flow with P(Attack) = ${(evData.stage1_probability * 100).toFixed(2)}% (Calibrated threshold: ${(evData.stage1_threshold || 0.40).toFixed(2)}) ➔ Routed to Stage 2 Multiclass model ➔ Classified as ${evData.attack_family}.`;
             }
 
             // Stage 2 Probability Breakdown
             if (modalStage2Breakdown) {
-                const probs = inc.stage2_probabilities || {};
+                const probs = evData.stage2_probabilities || {};
                 modalStage2Breakdown.innerHTML = Object.entries(probs).map(([fam, p]) => `
                     <div class="tree-prob-bar mb-2">
                         <span class="f-badge f-${fam.toLowerCase()}">${fam}:</span>
@@ -1030,8 +1079,9 @@ document.addEventListener("DOMContentLoaded", () => {
                 `).join("");
             }
 
-            // "Why was this detected?" - Feature Contributions Table
+            // Global Model Feature Importance vs Current Flow Values Table
             if (modalContributionsTbody) {
+                const contribs = evData.global_feature_importance || [];
                 modalContributionsTbody.innerHTML = contribs.map(c => `
                     <tr>
                         <td><strong class="mono text-cyan">${c.feature}</strong></td>
@@ -1042,9 +1092,30 @@ document.addEventListener("DOMContentLoaded", () => {
                 `).join("");
             }
 
+            // Contextual Threat Intelligence & Playbook
+            const intel = evData.threat_intelligence || {};
+            const intelBadge = document.getElementById("modal-intel-badge");
+            const intelBehavior = document.getElementById("modal-intel-behavior");
+            const intelVectors = document.getElementById("modal-intel-vectors");
+            const intelPlaybook = document.getElementById("modal-intel-playbook");
+
+            if (intelBadge) {
+                intelBadge.textContent = `${intel.family || evData.attack_family} Intelligence`;
+                intelBadge.className = `f-badge f-${(evData.attack_family || 'dos').toLowerCase()}`;
+            }
+            if (intelBehavior) intelBehavior.textContent = intel.behavior || "Observed anomaly pattern matching signature profile.";
+            if (intelVectors) {
+                const vectors = intel.common_vectors || ["Generic Incursion Vector"];
+                intelVectors.innerHTML = vectors.map(v => `<span class="v-pill">${v}</span>`).join("");
+            }
+            if (intelPlaybook) {
+                const steps = intel.recommended_playbook || ["Inspect firewall logs", "Verify host integrity"];
+                intelPlaybook.innerHTML = steps.map(s => `<li>${s}</li>`).join("");
+            }
+
             // 40-Feature Snapshot Grid
             if (modalFeaturesSnapshot) {
-                const feats = inc.features || {};
+                const feats = evData.features_snapshot || {};
                 modalFeaturesSnapshot.innerHTML = Object.entries(feats).map(([k, v]) => `
                     <div class="snap-item">
                         <span class="snap-k">${k}:</span>
@@ -1055,16 +1126,98 @@ document.addEventListener("DOMContentLoaded", () => {
 
             // Update Lifecycle Flow Tracker
             const steps = ["new", "investigating", "confirmed", "resolved"];
+            const currStatus = (evData.status || "New").toLowerCase();
             steps.forEach(st => {
                 const stepEl = document.getElementById(`life-step-${st}`);
                 if (stepEl) {
-                    stepEl.classList.toggle("current", (inc.status || "New").toLowerCase() === st);
+                    stepEl.classList.toggle("current", currStatus === st);
                 }
             });
 
+            // Milestones timestamps
+            const tsDict = evData.timeline_timestamps || {};
+            const msDet = document.getElementById("ms-detected");
+            const msInv = document.getElementById("ms-investigating");
+            const msConf = document.getElementById("ms-confirmed");
+            const msRes = document.getElementById("ms-resolved");
+
+            if (msDet) msDet.textContent = tsDict.detected_at || evData.timestamp || "--";
+            if (msInv) msInv.textContent = tsDict.investigating_at || "--";
+            if (msConf) msConf.textContent = tsDict.confirmed_at || "--";
+            if (msRes) msRes.textContent = tsDict.resolved_at || "--";
+
+            // Audit Timeline History Table
+            if (modalAuditTbody) {
+                const history = evData.lifecycle_history || [];
+                if (history.length === 0) {
+                    modalAuditTbody.innerHTML = `<tr><td colspan="4" class="table-empty">No lifecycle transitions recorded.</td></tr>`;
+                } else {
+                    modalAuditTbody.innerHTML = history.map(h => `
+                        <tr>
+                            <td class="mono text-dim">${h.timestamp}</td>
+                            <td><span class="badge-status status-${(h.status || 'new').toLowerCase()}">${h.status}</span></td>
+                            <td class="mono text-cyan">${h.actor || "System"}</td>
+                            <td class="text-xs text-muted">${h.note || "Status updated"}</td>
+                        </tr>
+                    `).join("");
+                }
+            }
+
+            // Analyst Notes Stream
+            if (modalNotesStream) {
+                const notes = evData.notes || [];
+                if (notes.length === 0) {
+                    modalNotesStream.innerHTML = `<div class="text-dim text-xs text-center py-2">No analyst notes recorded yet.</div>`;
+                } else {
+                    modalNotesStream.innerHTML = notes.map(n => `
+                        <div class="note-card">
+                            <div class="note-head">
+                                <span class="note-author">👤 ${n.analyst || "SOC Analyst"}</span>
+                                <span class="note-time">${n.timestamp}</span>
+                            </div>
+                            <p class="note-body">${n.text}</p>
+                        </div>
+                    `).join("");
+                }
+            }
+
+            // Correlated Related Incidents
+            if (modalRelatedTbody) {
+                const related = evData.related_incidents || [];
+                if (related.length === 0) {
+                    modalRelatedTbody.innerHTML = `<tr><td colspan="8" class="table-empty">No correlated related events detected.</td></tr>`;
+                } else {
+                    modalRelatedTbody.innerHTML = related.map(r => `
+                        <tr>
+                            <td class="mono text-cyan"><strong>${r.id}</strong></td>
+                            <td class="mono text-dim">${r.sample_id}</td>
+                            <td class="mono text-dim">${r.timestamp}</td>
+                            <td><span class="f-badge f-${r.attack_family.toLowerCase()}">${r.attack_family}</span></td>
+                            <td><span class="sev-badge sev-${r.severity.toLowerCase()}">${r.severity.toUpperCase()}</span></td>
+                            <td><span class="badge-status status-${r.status.toLowerCase()}">${r.status}</span></td>
+                            <td class="text-xs text-bright">${r.relationship_reason}</td>
+                            <td>
+                                <button class="btn btn-outline btn-sm" onclick="openIncidentModal('${r.id}')">Inspect</button>
+                            </td>
+                        </tr>
+                    `).join("");
+                }
+            }
+
             // Pre-populate status form
-            if (modalStatusSelect) modalStatusSelect.value = inc.status;
-            if (modalNotesInput) modalNotesInput.value = inc.notes || "";
+            if (modalStatusSelect) modalStatusSelect.value = evData.status;
+            if (modalNotesInput) modalNotesInput.value = "";
+
+            // Wire quick action buttons
+            if (modalQuickInvestigateBtn) {
+                modalQuickInvestigateBtn.onclick = () => transitionStatus(incidentId, "Investigating", "Analyst initiated investigation via quick action.");
+            }
+            if (modalQuickConfirmBtn) {
+                modalQuickConfirmBtn.onclick = () => transitionStatus(incidentId, "Confirmed", "Threat confirmed via quick action.");
+            }
+            if (modalQuickResolveBtn) {
+                modalQuickResolveBtn.onclick = () => transitionStatus(incidentId, "Resolved", "Incident resolved via quick action.");
+            }
 
             if (incidentModalOverlay) incidentModalOverlay.style.display = "flex";
         } catch (err) {
@@ -1087,6 +1240,7 @@ document.addEventListener("DOMContentLoaded", () => {
         });
     }
 
+    // Modal Status Form Submit
     if (modalStatusForm) {
         modalStatusForm.addEventListener("submit", async (e) => {
             e.preventDefault();
@@ -1094,37 +1248,37 @@ document.addEventListener("DOMContentLoaded", () => {
 
             const newStatus = modalStatusSelect.value;
             const newNotes = modalNotesInput.value;
+            const analyst = (modalAnalystName && modalAnalystName.value.trim()) || "SOC Analyst";
 
+            await transitionStatus(state.currentIncidentId, newStatus, newNotes);
+        });
+    }
+
+    // Modal Add Note Form Submit
+    if (modalAddNoteForm) {
+        modalAddNoteForm.addEventListener("submit", async (e) => {
+            e.preventDefault();
+            if (!state.currentIncidentId) return;
+            const noteText = modalNewNoteText ? modalNewNoteText.value.trim() : "";
+            if (!noteText) return;
+
+            const analyst = (modalAnalystName && modalAnalystName.value.trim()) || "SOC Analyst";
             try {
-                const resp = await fetch(`/api/incidents/${state.currentIncidentId}`, {
-                    method: "PATCH",
+                const resp = await fetch(`/api/incidents/${state.currentIncidentId}/notes`, {
+                    method: "POST",
                     headers: { "Content-Type": "application/json" },
                     body: JSON.stringify({
-                        status: newStatus,
-                        notes: newNotes
+                        text: noteText,
+                        analyst: analyst
                     })
                 });
 
-                if (!resp.ok) throw new Error("Status update failed");
-                const res = await resp.json();
-                if (modalStatusBadge) modalStatusBadge.textContent = newStatus;
-
-                // Update tracker
-                const steps = ["new", "investigating", "confirmed", "resolved"];
-                steps.forEach(st => {
-                    const stepEl = document.getElementById(`life-step-${st}`);
-                    if (stepEl) {
-                        stepEl.classList.toggle("current", newStatus.toLowerCase() === st);
-                    }
-                });
-
-                loadIncidents();
-                loadOverviewIncidents();
-                loadAnalyticsSummary();
-                if (incidentModalOverlay) incidentModalOverlay.style.display = "none";
+                if (!resp.ok) throw new Error("Failed to add note");
+                if (modalNewNoteText) modalNewNoteText.value = "";
+                await openIncidentModal(state.currentIncidentId);
             } catch (err) {
-                console.error("Status update error:", err);
-                alert("Failed to update status.");
+                console.error("Add note error:", err);
+                alert("Failed to record analyst note.");
             }
         });
     }

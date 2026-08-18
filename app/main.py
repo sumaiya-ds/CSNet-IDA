@@ -23,6 +23,7 @@ from src.schemas import (
     PresetResponse,
     ModelInfoResponse,
     IncidentUpdateRequest,
+    AddNoteRequest,
     SimulationStepRequest
 )
 from src.inference import (
@@ -39,6 +40,9 @@ from src.incidents import (
     get_incidents,
     get_incident_by_id,
     update_incident_status,
+    add_incident_note,
+    get_incident_evidence,
+    get_related_incidents,
     clear_incidents,
     export_incidents_csv
 )
@@ -58,8 +62,8 @@ START_TIME = datetime.now()
 
 app = FastAPI(
     title="CSNet-IDA",
-    description="Two-Stage Network Intrusion Detection & Security Intelligence Platform",
-    version="2.0.0"
+    description="Two-Stage Network Intrusion Detection & SOC Security Intelligence Platform",
+    version="2.5.0"
 )
 
 # CORS Middleware
@@ -71,15 +75,111 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Static file mount
+# Static files & templates mount
 app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 
 
-@app.get("/", response_class=FileResponse)
+@app.get("/", response_class=HTMLResponse)
 async def serve_dashboard():
-    """Serves the CSNet-IDA Security Operations Center dashboard."""
+    """Serves the main single-page SOC dashboard."""
     index_file = TEMPLATES_DIR / "index.html"
+    if not index_file.exists():
+        raise HTTPException(status_code=404, detail="Dashboard template not found")
     return FileResponse(str(index_file))
+
+
+# =========================================================================
+# Incident Center 2.0 Endpoints
+# =========================================================================
+
+@app.get("/api/incidents")
+async def api_get_incidents(
+    status: Optional[str] = Query(None),
+    family: Optional[str] = Query(None),
+    severity: Optional[str] = Query(None),
+    search: Optional[str] = Query(None),
+    sort_by: Optional[str] = Query("timestamp_desc"),
+    limit: int = Query(50, ge=1, le=200),
+    offset: int = Query(0, ge=0)
+):
+    """Returns filtered, sorted, and paginated detected security incidents."""
+    return get_incidents(
+        status=status,
+        family=family,
+        severity=severity,
+        search=search,
+        sort_by=sort_by,
+        limit=limit,
+        offset=offset
+    )
+
+
+@app.get("/api/incidents/export/csv")
+async def api_export_incidents_csv():
+    """Exports all stored incident telemetry as a CSV file."""
+    csv_data = export_incidents_csv()
+    filename = f"csnet_ida_incidents_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"
+    return PlainTextResponse(
+        csv_data,
+        media_type="text/csv",
+        headers={"Content-Disposition": f"attachment; filename={filename}"}
+    )
+
+
+@app.get("/api/incidents/{incident_id}")
+async def api_get_incident_detail(incident_id: str):
+    """Retrieves deep investigation details for a specific incident."""
+    inc = get_incident_by_id(incident_id)
+    if not inc:
+        raise HTTPException(status_code=404, detail=f"Incident '{incident_id}' not found")
+    
+    # Compute feature contributions for this specific incident
+    contributions = explain_single_sample(inc["features"])
+    return {
+        "incident": inc,
+        "feature_contributions": contributions
+    }
+
+
+@app.get("/api/incidents/{incident_id}/evidence")
+async def api_get_incident_evidence(incident_id: str):
+    """Retrieves complete SOC evidence package including Stage 1, Stage 2, features, model importance, and threat intel."""
+    evidence = get_incident_evidence(incident_id)
+    if not evidence:
+        raise HTTPException(status_code=404, detail=f"Incident '{incident_id}' not found")
+    return evidence
+
+
+@app.patch("/api/incidents/{incident_id}/status")
+@app.patch("/api/incidents/{incident_id}")
+async def api_update_incident_status_endpoint(incident_id: str, update: IncidentUpdateRequest):
+    """Updates the lifecycle status of an incident with strict workflow validation."""
+    try:
+        updated = update_incident_status(
+            incident_id=incident_id,
+            new_status=update.status,
+            notes=update.notes,
+            analyst=update.analyst or "SOC Analyst"
+        )
+        if not updated:
+            raise HTTPException(status_code=404, detail=f"Incident '{incident_id}' not found")
+        return {"success": True, "incident": updated}
+    except ValueError as ve:
+        raise HTTPException(status_code=400, detail=str(ve))
+
+
+@app.post("/api/incidents/{incident_id}/notes")
+async def api_add_incident_note(incident_id: str, req: AddNoteRequest):
+    """Appends an analyst investigation note to an incident."""
+    inc = get_incident_by_id(incident_id)
+    if not inc:
+        raise HTTPException(status_code=404, detail=f"Incident '{incident_id}' not found")
+    note = add_incident_note(
+        incident_id=incident_id,
+        text=req.text,
+        analyst=req.analyst or "SOC Analyst"
+    )
+    return {"success": True, "note": note, "notes": inc.get("notes", [])}
 
 
 # =========================================================================
@@ -111,71 +211,6 @@ async def api_explain_sample(features: ConnectionFeatures):
         return {"contributions": contributions}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Explainability computation failed: {str(e)}")
-
-
-# =========================================================================
-# Incident Management Endpoints
-# =========================================================================
-
-@app.get("/api/incidents")
-async def api_get_incidents(
-    status: Optional[str] = Query(None),
-    family: Optional[str] = Query(None),
-    severity: Optional[str] = Query(None),
-    search: Optional[str] = Query(None),
-    sort_by: Optional[str] = Query("timestamp_desc"),
-    limit: int = Query(50, ge=1, le=200),
-    offset: int = Query(0, ge=0)
-):
-    """Returns filtered, sorted, and paginated detected security incidents."""
-    return get_incidents(
-        status=status,
-        family=family,
-        severity=severity,
-        search=search,
-        sort_by=sort_by,
-        limit=limit,
-        offset=offset
-    )
-
-
-@app.get("/api/incidents/{incident_id}")
-async def api_get_incident_detail(incident_id: str):
-    """Retrieves deep investigation details for a specific incident."""
-    inc = get_incident_by_id(incident_id)
-    if not inc:
-        raise HTTPException(status_code=404, detail=f"Incident '{incident_id}' not found")
-    
-    # Compute feature contributions for this specific incident
-    contributions = explain_single_sample(inc["features"])
-    return {
-        "incident": inc,
-        "feature_contributions": contributions
-    }
-
-
-@app.patch("/api/incidents/{incident_id}")
-async def api_update_incident(incident_id: str, update: IncidentUpdateRequest):
-    """Updates the status and investigation notes of an incident."""
-    try:
-        updated = update_incident_status(incident_id, update.status, update.notes)
-        if not updated:
-            raise HTTPException(status_code=404, detail=f"Incident '{incident_id}' not found")
-        return {"success": True, "incident": updated}
-    except ValueError as ve:
-        raise HTTPException(status_code=400, detail=str(ve))
-
-
-@app.get("/api/incidents/export/csv")
-async def api_export_incidents_csv():
-    """Exports all stored incident telemetry as a CSV file."""
-    csv_data = export_incidents_csv()
-    filename = f"csnet_ida_incidents_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"
-    return PlainTextResponse(
-        csv_data,
-        media_type="text/csv",
-        headers={"Content-Disposition": f"attachment; filename={filename}"}
-    )
 
 
 # =========================================================================

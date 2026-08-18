@@ -2487,5 +2487,182 @@ body.soc-theme {
     background: rgba(34, 197, 94, 0.05) !important;
 }
 
+/* Phase 5 Incident Center 2.0 Enhancements */
+.modal-header-actions {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.pipeline-trace-visual {
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+    padding: 0.5rem 0.75rem;
+    background: rgba(15, 23, 42, 0.75);
+    border-radius: 6px;
+    border: 1px solid var(--border-color);
+    overflow-x: auto;
+    font-size: 0.72rem;
+    font-family: 'JetBrains Mono', monospace;
+}
+
+.trace-node {
+    padding: 0.2rem 0.5rem;
+    border-radius: 4px;
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    color: var(--text-bright);
+    white-space: nowrap;
+}
+
+.trace-node.node-alert {
+    background: rgba(239, 68, 68, 0.18);
+    border-color: rgba(239, 68, 68, 0.4);
+    color: #f87171;
+    font-weight: 700;
+}
+
+.trace-node.node-family {
+    background: rgba(0, 240, 255, 0.15);
+    border-color: rgba(0, 240, 255, 0.35);
+    color: var(--c-accent);
+    font-weight: 700;
+}
+
+.trace-arrow {
+    color: var(--text-dim);
+    font-size: 0.7rem;
+}
+
+/* Contextual Threat Intelligence Box */
+.threat-intel-box {
+    padding: 0.85rem 1rem;
+    background: var(--bg-card-inner);
+    border-radius: 6px;
+    border: 1px solid var(--border-color);
+    font-size: 0.78rem;
+}
+
+.intel-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.intel-origin-tag {
+    font-size: 0.68rem;
+    font-family: 'JetBrains Mono', monospace;
+    color: var(--text-dim);
+    background: rgba(255, 255, 255, 0.04);
+    padding: 0.15rem 0.45rem;
+    border-radius: 3px;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.intel-behavior {
+    color: var(--text-bright);
+    line-height: 1.4;
+    margin: 0;
+}
+
+.vector-pills {
+    display: flex;
+    gap: 0.4rem;
+    flex-wrap: wrap;
+}
+
+.v-pill {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.7rem;
+    padding: 0.15rem 0.5rem;
+    border-radius: 3px;
+    background: rgba(148, 163, 184, 0.1);
+    color: var(--text-bright);
+    border: 1px solid rgba(148, 163, 184, 0.2);
+}
+
+.playbook-list {
+    margin: 0.25rem 0 0 1.25rem;
+    padding: 0;
+    color: var(--text-muted);
+    line-height: 1.45;
+}
+
+.playbook-list li {
+    margin-bottom: 0.25rem;
+}
+
+/* Milestones Grid */
+.milestones-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 0.5rem;
+}
+
+.milestone-card {
+    padding: 0.5rem 0.65rem;
+    background: var(--bg-card-inner);
+    border-radius: 6px;
+    border: 1px solid var(--border-color);
+    text-align: center;
+}
+
+.ms-label {
+    display: block;
+    font-size: 0.65rem;
+    font-weight: 700;
+    color: var(--text-dim);
+    margin-bottom: 0.2rem;
+}
+
+.ms-val {
+    font-size: 0.72rem;
+    color: var(--text-bright);
+}
+
+/* Analyst Notes Stream */
+.notes-stream-container {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    max-height: 200px;
+    overflow-y: auto;
+}
+
+.note-card {
+    padding: 0.6rem 0.85rem;
+    background: var(--bg-card-inner);
+    border-radius: 6px;
+    border-left: 3px solid var(--c-accent);
+    font-size: 0.76rem;
+}
+
+.note-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 0.25rem;
+}
+
+.note-author {
+    font-weight: 700;
+    color: var(--c-accent);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.7rem;
+}
+
+.note-time {
+    color: var(--text-dim);
+    font-size: 0.68rem;
+    font-family: 'JetBrains Mono', monospace;
+}
+
+.note-body {
+    color: var(--text-bright);
+    line-height: 1.35;
+    margin: 0;
+}
+
 
 

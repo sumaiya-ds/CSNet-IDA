@@ -109,12 +109,33 @@ class ModelInfoResponse(BaseModel):
     attack_families: List[str] = ["DoS", "Probe", "R2L", "U2R"]
 
 
+class IncidentNote(BaseModel):
+    id: str = Field(description="Unique note identifier")
+    text: str = Field(description="Analyst note content")
+    timestamp: str = Field(description="Timestamp when note was recorded")
+    analyst: str = Field(default="SOC Analyst", description="Author or identity of the analyst")
+
+
+class AddNoteRequest(BaseModel):
+    text: str = Field(..., min_length=1, description="Content of analyst note")
+    analyst: Optional[str] = Field(default="SOC Analyst", description="Author or identity of the analyst")
+
+
+class IncidentTimelineEvent(BaseModel):
+    status: str = Field(description="Lifecycle status: New, Investigating, Confirmed, Resolved")
+    timestamp: str = Field(description="Timestamp of lifecycle transition")
+    note: Optional[str] = Field(default=None, description="Context or reason for status transition")
+    actor: Optional[str] = Field(default="System", description="Entity initiating transition")
+
+
 class IncidentUpdateRequest(BaseModel):
     status: str = Field(description="New status: New, Investigating, Confirmed, Resolved")
-    notes: Optional[str] = None
+    notes: Optional[str] = Field(default=None, description="Optional transition note or rationale")
+    analyst: Optional[str] = Field(default="SOC Analyst", description="Analyst performing update")
 
 
 class SimulationStepRequest(BaseModel):
     scenario: str = Field(default="mixed_enterprise", description="Scenario identifier")
     step_index: Optional[int] = None
     seed: Optional[int] = None
+
